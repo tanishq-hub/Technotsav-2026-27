@@ -1,26 +1,39 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+  --portal-black: #090807;
+  --portal-white: #ffffff;
+  --portal-muted: rgba(255, 255, 255, .78);
+  --portal-line: rgba(255, 255, 255, .48);
+  --font-display: Aalto, "Arial Narrow", sans-serif;
+  --font-body: "SF Pro", Arial, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+*,
+*::before,
+*::after { box-sizing: border-box; }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--portal-black);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--portal-white);
+  font-family: var(--font-body);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+button,
+a { font: inherit; }
+
+::selection { background: rgba(255, 255, 255, .32); color: var(--portal-white); }
+:focus-visible { outline: 2px solid var(--portal-white); outline-offset: 4px; }
