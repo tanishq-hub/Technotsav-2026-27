@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ASSETS, PLANETS, PLANET_STATES, SUN_ABOUT_PANELS, type PlanetKey } from "@/lib/planets";
+import { ASSETS, PLANETS, PLANET_STATES, R2_MEDIA_ORIGIN, SUN_ABOUT_PANELS, type PlanetKey } from "@/lib/planets";
 import "./planet-portal.css";
 
 type XY = { x: number; y: number };
@@ -15,24 +15,51 @@ function aboutMotionClass(panelIndex: number, activePanel: number, transition: A
   return panelIndex === activePanel ? "is-settled" : "is-hidden";
 }
 
-function ready(media: HTMLMediaElement, timeout = 4500) {
-  return new Promise<void>((resolve) => {
-    if (media.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) return resolve();
+function ready(media: HTMLMediaElement, timeout = 4500, requiredState: number = HTMLMediaElement.HAVE_CURRENT_DATA) {
+  return new Promise<boolean>((resolve) => {
+    if (media.error) return resolve(false);
+    if (media.readyState >= requiredState) return resolve(true);
+
     let done = false;
-    const finish = () => {
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      media.removeEventListener("loadeddata", check);
+      media.removeEventListener("canplay", check);
+      media.removeEventListener("error", failed);
+    };
+    const finish = (isReady: boolean) => {
       if (done) return;
       done = true;
-      clearTimeout(timer);
-      media.removeEventListener("canplaythrough", finish);
-      media.removeEventListener("loadeddata", finish);
+      cleanup();
+      resolve(isReady);
+    };
+    const check = () => {
+      if (media.readyState >= requiredState) finish(true);
+    };
+    const failed = () => finish(false);
+    const timer = window.setTimeout(() => finish(false), timeout);
+
+    media.addEventListener("loadeddata", check);
+    media.addEventListener("canplay", check);
+    media.addEventListener("error", failed);
+    check();
+  });
+}
+
+function playbackEnded(media: HTMLMediaElement, timeout: number) {
+  return new Promise<void>((resolve) => {
+    const finish = () => {
+      window.clearTimeout(timer);
+      media.removeEventListener("ended", finish);
       media.removeEventListener("error", finish);
       resolve();
     };
-    const timer = window.setTimeout(finish, timeout);
-    media.addEventListener("canplaythrough", finish, { once: true });
-    media.addEventListener("loadeddata", finish, { once: true });
+    const timer = window.setTimeout(() => {
+      media.pause();
+      finish();
+    }, timeout);
+    media.addEventListener("ended", finish, { once: true });
     media.addEventListener("error", finish, { once: true });
-    media.load();
   });
 }
 
@@ -40,6 +67,7 @@ export function PlanetPortal() {
   const root = useRef<HTMLElement>(null);
   const transitionOrigin = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const requestCanvasFrame = useRef<() => void>(() => {});
   const frozenCanvas = useRef<HTMLCanvasElement>(null);
   const backgroundVideo = useRef<HTMLVideoElement>(null);
   const transitionVideo = useRef<HTMLVideoElement>(null);
@@ -185,28 +213,58 @@ export function PlanetPortal() {
     const from = state.current;
     if (busy.current || from === destination) return;
     busy.current = true;
-    targetTilt.current = { x: 0, y: 0 };
     const video = transitionVideo.current;
     const shell = root.current;
     if (!video || !shell) { busy.current = false; return; }
 
-    try {
-      video.src = PLANET_STATES[destination].background;
-      video.load();
+    const showDestinationWithoutTransition = async () => {
+      shell.classList.remove("is-transitioning", "is-committing", "content-revealing");
       shell.classList.add("is-loading");
-      await ready(video, 1600);
+      commitState(destination);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      const background = backgroundVideo.current;
+      if (background) {
+        const backgroundReady = ready(background, 4500);
+        void background.play().catch(() => undefined);
+        await backgroundReady;
+      }
+      shell.classList.remove("is-loading");
+      revealContent();
+      busy.current = false;
+    };
+
+    try {
+      const destinationVideo = PLANET_STATES[destination].background;
+      // R2 must opt into CORS for its video frames to be drawn into the transition canvas.
+      if (destinationVideo.startsWith(`${R2_MEDIA_ORIGIN}/`)) video.crossOrigin = "anonymous";
+      else video.removeAttribute("crossorigin");
+      video.src = destinationVideo;
+      shell.classList.add("is-loading");
+      const transitionReady = ready(video, 5000, HTMLMediaElement.HAVE_FUTURE_DATA);
+      video.load();
+      if (!(await transitionReady)) {
+        // If the transition clip cannot buffer, switch planets directly and let
+        // the destination background load rather than animating a frozen frame.
+        await showDestinationWithoutTransition();
+        return;
+      }
+
       shell.classList.remove("is-loading", "content-revealing");
       shell.classList.add("is-transitioning");
       video.currentTime = 0;
-      video.playbackRate = 1.3;
+      video.playbackRate = 1;
+      try {
+        await video.play();
+      } catch {
+        await showDestinationWithoutTransition();
+        return;
+      }
+
       activeTransition.current = true;
-      const ended = new Promise<void>((resolve) => {
-        video.addEventListener("ended", () => resolve(), { once: true });
-        window.setTimeout(resolve, Math.min(15000, (video.duration || 8) * 1000 / 1.3 + 1200));
-      });
+      requestCanvasFrame.current();
+      const ended = playbackEnded(video, Math.min(15000, (video.duration || 8) * 1000 + 1200));
       await Promise.all([
         animateValue((v) => { expansion.current = v; }, 1100),
-        video.play().catch(() => undefined),
         ended,
       ]);
       const snapshot = frozenCanvas.current?.getContext("2d");
@@ -214,25 +272,30 @@ export function PlanetPortal() {
         snapshot.clearRect(0, 0, frozenCanvas.current.width, frozenCanvas.current.height);
         snapshot.drawImage(canvas.current, 0, 0, innerWidth, innerHeight);
         frozen.current = true;
+        requestCanvasFrame.current();
       }
       commitState(destination);
       shell.classList.add("is-committing");
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       activeTransition.current = false;
       expansion.current = 0;
+      requestCanvasFrame.current();
       shell.classList.remove("is-transitioning", "is-committing");
       window.setTimeout(revealContent, reduceMotion() ? 0 : 100);
       const background = backgroundVideo.current;
       if (background) {
-        await ready(background, 1600);
-        try { await background.play(); } catch { /* Keep the committed frame if playback is unavailable. */ }
+        const backgroundReady = ready(background, 4500);
+        void background.play().catch(() => undefined);
+        await backgroundReady;
       }
       frozen.current = false;
+      requestCanvasFrame.current();
       window.setTimeout(() => { video.removeAttribute("src"); video.load(); busy.current = false; }, 450);
     } catch {
       activeTransition.current = false;
       expansion.current = 0;
       frozen.current = false;
+      requestCanvasFrame.current();
       shell.classList.remove("is-loading", "is-transitioning", "is-committing");
       busy.current = false;
     }
@@ -245,6 +308,10 @@ export function PlanetPortal() {
     if (!el || !behind || !ctx) return;
     let w = innerWidth, h = innerHeight, raf = 0, previous = performance.now();
 
+    const schedule = () => {
+      if (!raf && document.visibilityState === "visible") raf = requestAnimationFrame(draw);
+    };
+
     const resize = () => {
       w = innerWidth; h = innerHeight;
       const dpr = Math.min(devicePixelRatio || 1, 2);
@@ -253,6 +320,7 @@ export function PlanetPortal() {
         c.style.width = `${w}px`; c.style.height = `${h}px`;
         c.getContext("2d")?.setTransform(dpr, 0, 0, dpr, 0, 0);
       });
+      if (activeTransition.current || frozen.current) schedule();
     };
     const drawCover = (context: CanvasRenderingContext2D, media: HTMLVideoElement | HTMLImageElement | null) => {
       if (!media) return;
@@ -278,10 +346,13 @@ export function PlanetPortal() {
       return points;
     };
     const draw = (now: number) => {
+      raf = 0;
       const dt = Math.min(40, now - previous); previous = now;
-      const lerp = Math.min(1, dt * .009);
-      tilt.current.x += (targetTilt.current.x - tilt.current.x) * lerp;
-      tilt.current.y += (targetTilt.current.y - tilt.current.y) * lerp;
+      if (activeTransition.current) {
+        const lerp = Math.min(1, dt * .009);
+        tilt.current.x += (targetTilt.current.x - tilt.current.x) * lerp;
+        tilt.current.y += (targetTilt.current.y - tilt.current.y) * lerp;
+      }
       ctx.clearRect(0, 0, w, h);
       if (frozen.current) { ctx.drawImage(behind, 0, 0, w, h); shade(ctx); }
       const rect = transitionOrigin.current?.getBoundingClientRect(), e = expansion.current;
@@ -309,23 +380,30 @@ export function PlanetPortal() {
           ctx.restore();
         }
       }
-      if (document.visibilityState === "visible") raf = requestAnimationFrame(draw);
+      if (activeTransition.current) schedule();
     };
     const move = (e: PointerEvent) => {
-      if (busy.current || reduceMotion() || e.pointerType === "touch") return;
+      if (reduceMotion() || e.pointerType === "touch") return;
       targetTilt.current = { y: (e.clientX / innerWidth - .5) * 37.4, x: (e.clientY / innerHeight - .5) * -33 };
+      if (activeTransition.current) schedule();
     };
-    const leave = () => { targetTilt.current = { x: 0, y: 0 }; };
+    const leave = () => {
+      targetTilt.current = { x: 0, y: 0 };
+      if (activeTransition.current) schedule();
+    };
     const visibility = () => {
       cancelAnimationFrame(raf);
-      if (document.visibilityState === "visible") { previous = performance.now(); raf = requestAnimationFrame(draw); }
+      raf = 0;
+      if (document.visibilityState === "visible") { previous = performance.now(); schedule(); }
     };
-    resize(); raf = requestAnimationFrame(draw);
+    requestCanvasFrame.current = schedule;
+    resize();
     addEventListener("resize", resize); addEventListener("pointermove", move); addEventListener("pointerleave", leave);
     document.addEventListener("visibilitychange", visibility);
     return () => {
       cancelAnimationFrame(raf); removeEventListener("resize", resize); removeEventListener("pointermove", move);
       removeEventListener("pointerleave", leave); document.removeEventListener("visibilitychange", visibility);
+      if (requestCanvasFrame.current === schedule) requestCanvasFrame.current = () => {};
     };
   }, []);
 

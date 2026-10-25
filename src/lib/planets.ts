@@ -1,14 +1,17 @@
+export const R2_MEDIA_ORIGIN = "https://technotsav-media.luckymobilebarhi.in";
+const R2_PLANET_MEDIA = `${R2_MEDIA_ORIGIN}/planets`;
+
 export const ASSETS = {
   marsBackground: "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/3c83091e-4046-4fd6-adbb-2edb728be79a.mp4",
   toEarth: "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/fc3ded42-e845-41f3-a830-5cab512d79cd.mp4",
   toVenus: "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/b30f64d9-1637-477a-83df-d0fc6461a422.mp4",
   marsVideo: "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/5fc5651c-3b5d-4171-b507-87f7e635d1b4.mp4",
-  sunVideo: "/planets/sun.mp4",
-  mercuryVideo: "/planets/mercury.mp4",
-  jupiterVideo: "/planets/jupiter.mp4",
-  saturnVideo: "/planets/saturn.mp4",
-  uranusVideo: "/planets/uranus.mp4",
-  neptuneVideo: "/planets/neptune.mp4",
+  sunVideo: `${R2_PLANET_MEDIA}/sun.mp4`,
+  mercuryVideo: `${R2_PLANET_MEDIA}/mercury.mp4`,
+  jupiterVideo: `${R2_PLANET_MEDIA}/jupiter.mp4`,
+  saturnVideo: `${R2_PLANET_MEDIA}/saturn.mp4`,
+  uranusVideo: `${R2_PLANET_MEDIA}/uranus.mp4`,
+  neptuneVideo: `${R2_PLANET_MEDIA}/neptune.mp4`,
 } as const;
 
 export type PlanetKey = "sun" | "mercury" | "venus" | "earth" | "mars" | "jupiter" | "saturn" | "uranus" | "neptune";
