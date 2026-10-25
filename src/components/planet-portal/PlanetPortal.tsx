@@ -2,12 +2,37 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ASSETS, PLANETS, PLANET_STATES, R2_MEDIA_ORIGIN, SUN_ABOUT_PANELS, type PlanetKey } from "@/lib/planets";
+import { EVENT_TIME_ZONE, TECHNOTSAV_EVENT_START } from "@/lib/event-time";
 import "./planet-portal.css";
 
 type XY = { x: number; y: number };
 type AboutTransition = { from: number; to: number; direction: "forward" | "backward" };
+type TravelRequest = { destination: PlanetKey; panelIndex: number };
+type CountdownParts = { days: number; hours: number; minutes: number; seconds: number };
+type VideoPreloadQueue = {
+  items: string[];
+  completed: Set<string>;
+  index: number;
+  activeController: AbortController | null;
+  paused: boolean;
+  running: boolean;
+};
 const ease = (t: number) => t < .5 ? 4 * t ** 3 : 1 - Math.pow(-2 * t + 2, 3) / 2;
 const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function panelCountFor(planet: PlanetKey) {
+  return planet === "sun" ? SUN_ABOUT_PANELS.length + 1 : 1;
+}
+
+function countdownUntilEvent(now: number): CountdownParts {
+  const totalSeconds = Math.max(0, Math.floor((TECHNOTSAV_EVENT_START - now) / 1000));
+  return {
+    days: Math.floor(totalSeconds / 86_400),
+    hours: Math.floor((totalSeconds % 86_400) / 3_600),
+    minutes: Math.floor((totalSeconds % 3_600) / 60),
+    seconds: totalSeconds % 60,
+  };
+}
 
 function aboutMotionClass(panelIndex: number, activePanel: number, transition: AboutTransition | null) {
   if (transition?.from === panelIndex) return transition.direction === "forward" ? "is-leaving-up" : "is-leaving-down";
@@ -63,6 +88,137 @@ function playbackEnded(media: HTMLMediaElement, timeout: number) {
   });
 }
 
+async function downloadVideoIntoBrowserCache(
+  url: string,
+  signal: AbortSignal,
+  onProgress?: (progress: number) => void,
+) {
+  const response = await fetch(url, { cache: "default", credentials: "omit", mode: "cors", signal });
+  if (!response.ok || !response.body) throw new Error(`Video preload failed (${response.status})`);
+
+  const total = Number(response.headers.get("content-length"));
+  const reader = response.body.getReader();
+  let received = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (total > 0) onProgress?.(Math.min(1, received / total));
+  }
+  onProgress?.(1);
+}
+
+function mediaBufferedToEnd(video: HTMLVideoElement) {
+  if (!Number.isFinite(video.duration) || video.duration <= 0) return false;
+  for (let index = 0; index < video.buffered.length; index += 1) {
+    if (video.buffered.start(index) < 0.1 && video.buffered.end(index) >= video.duration - 0.1) return true;
+  }
+  return false;
+}
+
+function waitForFullMediaBuffer(video: HTMLVideoElement, timeout: number, signal: AbortSignal) {
+  return new Promise<boolean>((resolve) => {
+    if (mediaBufferedToEnd(video)) return resolve(true);
+    let done = false;
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      video.removeEventListener("progress", check);
+      video.removeEventListener("loadedmetadata", check);
+      video.removeEventListener("canplaythrough", check);
+      video.removeEventListener("error", failed);
+      signal.removeEventListener("abort", aborted);
+    };
+    const finish = (result: boolean) => {
+      if (done) return;
+      done = true;
+      cleanup();
+      resolve(result);
+    };
+    const check = () => { if (mediaBufferedToEnd(video)) finish(true); };
+    const failed = () => finish(false);
+    const aborted = () => finish(false);
+    const timer = window.setTimeout(() => finish(false), timeout);
+    video.addEventListener("progress", check);
+    video.addEventListener("loadedmetadata", check);
+    video.addEventListener("canplaythrough", check);
+    video.addEventListener("error", failed);
+    signal.addEventListener("abort", aborted, { once: true });
+    check();
+  });
+}
+
+function preloadCrossOriginVideo(url: string, signal: AbortSignal) {
+  return new Promise<void>((resolve) => {
+    if (signal.aborted) return resolve();
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    let done = false;
+    const cleanup = () => {
+      video.removeEventListener("progress", check);
+      video.removeEventListener("loadedmetadata", check);
+      video.removeEventListener("canplaythrough", check);
+      video.removeEventListener("error", finish);
+      signal.removeEventListener("abort", finish);
+      video.removeAttribute("src");
+      video.load();
+    };
+    const finish = () => {
+      if (done) return;
+      done = true;
+      cleanup();
+      resolve();
+    };
+    const check = () => { if (mediaBufferedToEnd(video)) finish(); };
+    video.addEventListener("progress", check);
+    video.addEventListener("loadedmetadata", check);
+    video.addEventListener("canplaythrough", check);
+    video.addEventListener("error", finish);
+    signal.addEventListener("abort", finish, { once: true });
+    video.src = url;
+    video.load();
+    check();
+  });
+}
+
+async function runVideoPreloadQueue(queue: VideoPreloadQueue) {
+  if (queue.running || queue.paused) return;
+  queue.running = true;
+  try {
+    while (queue.index < queue.items.length && !queue.paused) {
+      const url = queue.items[queue.index];
+      if (queue.completed.has(url)) {
+        queue.index += 1;
+        continue;
+      }
+
+      const controller = new AbortController();
+      queue.activeController = controller;
+      try {
+        await downloadVideoIntoBrowserCache(url, controller.signal);
+      } catch {
+        if (!controller.signal.aborted) {
+          // Some public cross-origin media does not allow fetch CORS. Let the
+          // browser's video loader warm its normal media cache instead.
+          await preloadCrossOriginVideo(url, controller.signal);
+        }
+      }
+
+      if (controller.signal.aborted || queue.paused) break;
+      queue.completed.add(url);
+      queue.index += 1;
+      queue.activeController = null;
+    }
+  } finally {
+    queue.activeController = null;
+    queue.running = false;
+    if (!queue.paused && queue.index < queue.items.length) {
+      queueMicrotask(() => { void runVideoPreloadQueue(queue); });
+    }
+  }
+}
+
 export function PlanetPortal() {
   const root = useRef<HTMLElement>(null);
   const transitionOrigin = useRef<HTMLDivElement>(null);
@@ -73,7 +229,11 @@ export function PlanetPortal() {
   const transitionVideo = useRef<HTMLVideoElement>(null);
   const preloaderVideo = useRef<HTMLVideoElement>(null);
   const [planet, setPlanet] = useState<PlanetKey>("sun");
+  const [backgroundPlanet, setBackgroundPlanet] = useState<PlanetKey>("sun");
+  const [selectedPlanet, setSelectedPlanet] = useState<PlanetKey>("sun");
   const [counter, setCounter] = useState(0);
+  const [countdown, setCountdown] = useState<CountdownParts | null>(null);
+  const [introComplete, setIntroComplete] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [aboutPanel, setAboutPanel] = useState(0);
@@ -86,6 +246,11 @@ export function PlanetPortal() {
   const aboutPanelLocked = useRef(false);
   const aboutPanelTimer = useRef<number | null>(null);
   const activeTransition = useRef(false);
+  const panelSequenceReady = useRef(false);
+  const queuedTravel = useRef<TravelRequest | null>(null);
+  const travelRef = useRef<(destination: PlanetKey, panelIndex?: number) => void>(() => {});
+  const backgroundPreloadQueue = useRef<VideoPreloadQueue | null>(null);
+  const resumeBackgroundPreload = useRef<() => void>(() => {});
   const frozen = useRef(false);
   const busy = useRef(false);
 
@@ -110,37 +275,58 @@ export function PlanetPortal() {
     el?.classList.add("content-revealing");
   };
 
-  const moveAboutPanel = useCallback((direction: "forward" | "backward") => {
-    if (state.current !== "sun" || busy.current || aboutPanelLocked.current) return;
+  const movePanel = useCallback((direction: "forward" | "backward") => {
+    const currentPlanet = state.current;
+    if ((busy.current && !panelSequenceReady.current) || aboutPanelLocked.current) return;
     const from = aboutPanelIndex.current;
-    const to = Math.max(0, Math.min(SUN_ABOUT_PANELS.length, from + (direction === "forward" ? 1 : -1)));
-    if (to === from) return;
-    aboutPanelLocked.current = true;
-    aboutPanelIndex.current = to;
-    setAboutPanel(to);
-    setAboutTransition({ from, to, direction });
-    aboutPanelTimer.current = window.setTimeout(() => {
-      setAboutTransition(null);
-      aboutPanelLocked.current = false;
-      aboutPanelTimer.current = null;
-    }, reduceMotion() ? 80 : 980);
+    const lastPanel = panelCountFor(currentPlanet) - 1;
+    const to = from + (direction === "forward" ? 1 : -1);
+    if (to >= 0 && to <= lastPanel) {
+      aboutPanelLocked.current = true;
+      aboutPanelIndex.current = to;
+      setAboutPanel(to);
+      if (currentPlanet === "sun") setAboutTransition({ from, to, direction });
+      aboutPanelTimer.current = window.setTimeout(() => {
+        setAboutTransition(null);
+        aboutPanelLocked.current = false;
+        aboutPanelTimer.current = null;
+      }, reduceMotion() ? 80 : 980);
+      return;
+    }
+
+    const planetPosition = PLANETS.findIndex(({ key }) => key === currentPlanet);
+    const adjacent = PLANETS[planetPosition + (direction === "forward" ? 1 : -1)];
+    if (!adjacent) return;
+    const destinationPanel = direction === "forward" ? 0 : panelCountFor(adjacent.key) - 1;
+    travelRef.current(adjacent.key, destinationPanel);
   }, []);
 
-  const commitState = useCallback((next: PlanetKey) => {
+  const commitState = useCallback((next: PlanetKey, initialPanel = 0) => {
     if (state.current !== next) {
       if (aboutPanelTimer.current !== null) window.clearTimeout(aboutPanelTimer.current);
       aboutPanelLocked.current = false;
-      aboutPanelIndex.current = 0;
-      setAboutPanel(0);
+      aboutPanelIndex.current = initialPanel;
+      setAboutPanel(initialPanel);
       setAboutTransition(null);
       setSwitching(false);
       requestAnimationFrame(() => {
         setSwitching(true);
         window.setTimeout(() => setSwitching(false), 850);
       });
+    } else if (aboutPanelIndex.current !== initialPanel) {
+      aboutPanelIndex.current = initialPanel;
+      setAboutPanel(initialPanel);
+      setAboutTransition(null);
     }
     state.current = next;
     setPlanet(next);
+  }, []);
+
+  useEffect(() => {
+    const update = () => setCountdown(countdownUntilEvent(Date.now()));
+    update();
+    const interval = window.setInterval(update, 1000);
+    return () => window.clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -153,7 +339,7 @@ export function PlanetPortal() {
     const ignoredTarget = (target: EventTarget | null) =>
       target instanceof Element && Boolean(target.closest(".planet-list, .header, button, a"));
     const wheel = (event: WheelEvent) => {
-      if (state.current !== "sun" || event.ctrlKey || Math.abs(event.deltaY) < Math.abs(event.deltaX) || ignoredTarget(event.target)) return;
+      if (event.ctrlKey || Math.abs(event.deltaY) < Math.abs(event.deltaX) || ignoredTarget(event.target)) return;
       event.preventDefault();
       window.clearTimeout(wheelIdleTimer);
       wheelIdleTimer = window.setTimeout(() => { wheelDelta = 0; wheelConsumed = false; }, 280);
@@ -163,11 +349,11 @@ export function PlanetPortal() {
         const direction = wheelDelta > 0 ? "forward" : "backward";
         wheelDelta = 0;
         wheelConsumed = true;
-        moveAboutPanel(direction);
+        movePanel(direction);
       }
     };
     const touchStart = (event: TouchEvent) => {
-      if (state.current !== "sun" || event.touches.length !== 1 || ignoredTarget(event.target)) { touchY = null; return; }
+      if (event.touches.length !== 1 || ignoredTarget(event.target)) { touchY = null; return; }
       touchY = event.touches[0].clientY;
     };
     const touchMove = (event: TouchEvent) => {
@@ -177,7 +363,7 @@ export function PlanetPortal() {
     const touchEnd = (event: TouchEvent) => {
       if (touchY !== null && event.changedTouches.length) {
         const distance = touchY - event.changedTouches[0].clientY;
-        if (Math.abs(distance) > 42) moveAboutPanel(distance > 0 ? "forward" : "backward");
+        if (Math.abs(distance) > 42) movePanel(distance > 0 ? "forward" : "backward");
       }
       touchY = null;
     };
@@ -194,7 +380,7 @@ export function PlanetPortal() {
       shell.removeEventListener("touchend", touchEnd);
       shell.removeEventListener("touchcancel", touchEnd);
     };
-  }, [moveAboutPanel]);
+  }, [movePanel]);
 
   useEffect(() => () => {
     if (aboutPanelTimer.current !== null) window.clearTimeout(aboutPanelTimer.current);
@@ -209,18 +395,59 @@ export function PlanetPortal() {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [menuOpen]);
 
-  const travel = useCallback(async (destination: PlanetKey) => {
-    const from = state.current;
-    if (busy.current || from === destination) return;
+  const travel = useCallback(async (destination: PlanetKey, initialPanel = 0) => {
+    if (!busy.current && state.current === destination) return;
+    const preloadQueue = backgroundPreloadQueue.current;
+    if (preloadQueue) {
+      preloadQueue.paused = true;
+      preloadQueue.activeController?.abort();
+    }
+
+    if (busy.current) {
+      queuedTravel.current = { destination, panelIndex: initialPanel };
+      setSelectedPlanet(destination);
+      return;
+    }
+
     busy.current = true;
+    panelSequenceReady.current = false;
+    queuedTravel.current = null;
+    setSelectedPlanet(destination);
     const video = transitionVideo.current;
     const shell = root.current;
-    if (!video || !shell) { busy.current = false; return; }
+    if (!video || !shell) { setSelectedPlanet(state.current); busy.current = false; return; }
 
+    let destinationRevealed = false;
+    const revealDestination = () => {
+      if (destinationRevealed) return;
+      destinationRevealed = true;
+      commitState(destination, initialPanel);
+      shell.classList.add("is-content-visible");
+      revealContent();
+      panelSequenceReady.current = true;
+    };
+    const finishTravel = () => {
+      activeTransition.current = false;
+      expansion.current = 0;
+      frozen.current = false;
+      panelSequenceReady.current = false;
+      video.removeAttribute("src");
+      video.load();
+      requestCanvasFrame.current();
+      busy.current = false;
+      const queued = queuedTravel.current;
+      queuedTravel.current = null;
+      if (queued && queued.destination !== state.current) {
+        requestAnimationFrame(() => travelRef.current(queued.destination, queued.panelIndex));
+      } else {
+        resumeBackgroundPreload.current();
+      }
+    };
     const showDestinationWithoutTransition = async () => {
-      shell.classList.remove("is-transitioning", "is-committing", "content-revealing");
+      shell.classList.remove("is-transitioning", "is-committing", "is-content-visible", "content-revealing");
       shell.classList.add("is-loading");
-      commitState(destination);
+      revealDestination();
+      setBackgroundPlanet(destination);
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       const background = backgroundVideo.current;
       if (background) {
@@ -229,8 +456,7 @@ export function PlanetPortal() {
         await backgroundReady;
       }
       shell.classList.remove("is-loading");
-      revealContent();
-      busy.current = false;
+      finishTravel();
     };
 
     try {
@@ -239,12 +465,12 @@ export function PlanetPortal() {
       if (destinationVideo.startsWith(`${R2_MEDIA_ORIGIN}/`)) video.crossOrigin = "anonymous";
       else video.removeAttribute("crossorigin");
       video.src = destinationVideo;
+      shell.classList.remove("is-content-visible");
       shell.classList.add("is-loading");
-      const transitionReady = ready(video, 5000, HTMLMediaElement.HAVE_FUTURE_DATA);
+      const transitionReady = ready(video, 5000, HTMLMediaElement.HAVE_CURRENT_DATA);
       video.load();
       if (!(await transitionReady)) {
-        // If the transition clip cannot buffer, switch planets directly and let
-        // the destination background load rather than animating a frozen frame.
+        // Keep navigation usable if the transition asset is slow or unavailable.
         await showDestinationWithoutTransition();
         return;
       }
@@ -263,10 +489,14 @@ export function PlanetPortal() {
       activeTransition.current = true;
       requestCanvasFrame.current();
       const ended = playbackEnded(video, Math.min(15000, (video.duration || 8) * 1000 + 1200));
+      const revealTimer = window.setTimeout(revealDestination, 2000);
       await Promise.all([
         animateValue((v) => { expansion.current = v; }, 1100),
         ended,
       ]);
+      window.clearTimeout(revealTimer);
+      revealDestination();
+
       const snapshot = frozenCanvas.current?.getContext("2d");
       if (snapshot && canvas.current && frozenCanvas.current) {
         snapshot.clearRect(0, 0, frozenCanvas.current.width, frozenCanvas.current.height);
@@ -274,32 +504,37 @@ export function PlanetPortal() {
         frozen.current = true;
         requestCanvasFrame.current();
       }
-      commitState(destination);
       shell.classList.add("is-committing");
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       activeTransition.current = false;
       expansion.current = 0;
       requestCanvasFrame.current();
-      shell.classList.remove("is-transitioning", "is-committing");
-      window.setTimeout(revealContent, reduceMotion() ? 0 : 100);
+      shell.classList.remove("is-committing");
+      setBackgroundPlanet(destination);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       const background = backgroundVideo.current;
       if (background) {
         const backgroundReady = ready(background, 4500);
         void background.play().catch(() => undefined);
         await backgroundReady;
       }
-      frozen.current = false;
-      requestCanvasFrame.current();
-      window.setTimeout(() => { video.removeAttribute("src"); video.load(); busy.current = false; }, 450);
+      shell.classList.remove("is-transitioning", "is-content-visible");
+      finishTravel();
     } catch {
-      activeTransition.current = false;
-      expansion.current = 0;
-      frozen.current = false;
-      requestCanvasFrame.current();
-      shell.classList.remove("is-loading", "is-transitioning", "is-committing");
-      busy.current = false;
+      shell.classList.remove("is-loading", "is-transitioning", "is-committing", "is-content-visible");
+      revealDestination();
+      setBackgroundPlanet(destination);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      const background = backgroundVideo.current;
+      if (background) {
+        const backgroundReady = ready(background, 4500);
+        void background.play().catch(() => undefined);
+        await backgroundReady;
+      }
+      finishTravel();
     }
   }, [animateValue, commitState]);
+  useEffect(() => { travelRef.current = travel; }, [travel]);
 
   useEffect(() => {
     const el = canvas.current;
@@ -410,21 +645,23 @@ export function PlanetPortal() {
   useEffect(() => {
     document.body.classList.remove("preload-complete", "intro-ready", "content-revealing");
     const video = preloaderVideo.current;
-    let finished = false, raf = 0, logoRevealTimer = 0;
+    let finished = false, logoRevealTimer = 0;
     let counterNode: HTMLElement | null = null;
     if (!video) return;
+    const controller = new AbortController();
     const start = () => {
       document.body.classList.add("intro-ready");
       window.setTimeout(revealContent, reduceMotion() ? 0 : 850);
     };
     const finish = () => {
       if (finished) return;
-      finished = true; cancelAnimationFrame(raf); setCounter(100);
+      finished = true; controller.abort(); setCounter(100);
       counterNode = document.getElementById("preloader-count");
       counterNode?.classList.add("is-leaving");
       document.getElementById("floating-lockup")?.classList.add("is-docked");
       document.getElementById("preloader")?.classList.add("is-background");
       document.body.classList.add("preload-complete");
+      setIntroComplete(true);
       start();
       window.setTimeout(() => counterNode?.remove(), 750);
       logoRevealTimer = window.setTimeout(() => {
@@ -432,25 +669,32 @@ export function PlanetPortal() {
         document.getElementById("floating-theme")?.classList.add("is-revealing");
       }, reduceMotion() ? 0 : 2000);
     };
-    const update = () => {
-      if (!finished && Number.isFinite(video.duration) && video.duration > 0) {
-        setCounter(Math.min(99, Math.round(video.currentTime / video.duration * 100)));
-        raf = requestAnimationFrame(update);
-      }
-    };
     const begin = () => {
-      if (reduceMotion()) { finish(); return; }
+      if (reduceMotion()) return;
       video.playbackRate = Math.max(.25, (video.duration || 3) / 3);
-      raf = requestAnimationFrame(update);
-      void video.play().catch(finish);
+      void video.play().catch(() => undefined);
     };
     video.addEventListener("loadedmetadata", begin, { once: true });
-    video.addEventListener("ended", finish, { once: true });
-    video.addEventListener("error", finish, { once: true });
     if (video.readyState >= HTMLMediaElement.HAVE_METADATA) begin();
-    const failSafe = window.setTimeout(finish, 8000);
+
+    const sunDownload = downloadVideoIntoBrowserCache(ASSETS.sunVideo, controller.signal, (progress) => {
+      if (!finished) setCounter(Math.min(99, Math.round(progress * 99)));
+    }).catch(() => false);
+    const spaceDownload = (async () => {
+      if (await waitForFullMediaBuffer(video, 12_000, controller.signal)) return true;
+      try {
+        await downloadVideoIntoBrowserCache(ASSETS.spaceVideo, controller.signal);
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+    void Promise.all([sunDownload, spaceDownload]).then(finish);
+
+    // A broken or blocked media request must not leave the whole experience inaccessible.
+    const failSafe = window.setTimeout(finish, 45_000);
     return () => {
-      clearTimeout(failSafe); clearTimeout(logoRevealTimer); cancelAnimationFrame(raf);
+      clearTimeout(failSafe); clearTimeout(logoRevealTimer); controller.abort();
       video.removeEventListener("loadedmetadata", begin); video.removeEventListener("ended", finish);
       video.removeEventListener("error", finish);
       document.body.classList.remove("preload-complete", "intro-ready", "content-revealing");
@@ -458,13 +702,45 @@ export function PlanetPortal() {
   }, []);
 
   useEffect(() => {
+    if (!introComplete) return;
+    const seen = new Set<string>([ASSETS.spaceVideo, ASSETS.sunVideo]);
+    const queue = PLANETS.flatMap(({ key }) => {
+      const url = PLANET_STATES[key].background;
+      if (seen.has(url)) return [];
+      seen.add(url);
+      return [url];
+    });
+
+    const manager: VideoPreloadQueue = {
+      items: queue,
+      completed: new Set([ASSETS.spaceVideo, ASSETS.sunVideo]),
+      index: 0,
+      activeController: null,
+      paused: false,
+      running: false,
+    };
+    backgroundPreloadQueue.current = manager;
+    resumeBackgroundPreload.current = () => {
+      manager.paused = false;
+      void runVideoPreloadQueue(manager);
+    };
+    void runVideoPreloadQueue(manager);
+    return () => {
+      manager.paused = true;
+      manager.activeController?.abort();
+      if (backgroundPreloadQueue.current === manager) backgroundPreloadQueue.current = null;
+      resumeBackgroundPreload.current = () => {};
+    };
+  }, [introComplete]);
+
+  useEffect(() => {
     const background = backgroundVideo.current;
-    if (background) {
+    if (background && introComplete) {
       background.pause();
       background.load();
       void background.play().catch(() => undefined);
     }
-  }, [planet]);
+  }, [backgroundPlanet, introComplete]);
 
   useEffect(() => {
     const cursor = document.querySelector<HTMLElement>(".custom-cursor");
@@ -487,12 +763,21 @@ export function PlanetPortal() {
 
   const cfg = PLANET_STATES[planet];
   return (
-    <main className="experience" data-planet={planet} ref={root} aria-label="Planet Jumping experience">
+    <main className="experience" data-planet={planet} data-selected-planet={selectedPlanet} ref={root} aria-label="Planet Jumping experience">
       <div className="backgrounds" aria-hidden="true">
-        <video ref={backgroundVideo} className="background is-visible" src={PLANET_STATES[planet].background} muted playsInline preload="metadata" loop />
+        <video
+          ref={backgroundVideo}
+          className="background is-visible"
+          src={PLANET_STATES[backgroundPlanet].background}
+          crossOrigin={PLANET_STATES[backgroundPlanet].background.startsWith(`${R2_MEDIA_ORIGIN}/`) ? "anonymous" : undefined}
+          muted
+          playsInline
+          preload={introComplete ? "metadata" : "none"}
+          loop
+        />
       </div>
-      <div className="preloader" id="preloader" aria-label="Loading the Sun">
-        <video ref={preloaderVideo} id="preloader-video" src={ASSETS.sunVideo} muted playsInline preload="auto" />
+      <div className="preloader" id="preloader" aria-label="Loading into space">
+        <video ref={preloaderVideo} id="preloader-video" src={ASSETS.spaceVideo} crossOrigin="anonymous" muted playsInline preload="auto" />
         <div className="preloader-shade" />
       </div>
       <div className="floating-lockup" id="floating-lockup" role="group" aria-label="Technotsav 11th edition logo">
@@ -507,16 +792,34 @@ export function PlanetPortal() {
       <canvas ref={frozenCanvas} className="scene-canvas" aria-hidden="true" />
       <div className="shade" aria-hidden="true" />
 
+      <div
+        className="event-countdown"
+        role="timer"
+        aria-live="off"
+        aria-label={countdown ? `Technotsav countdown: ${countdown.days} days, ${countdown.hours} hours, ${countdown.minutes} minutes, ${countdown.seconds} seconds to midnight IST on November 27, 2026` : "Technotsav countdown to midnight IST on November 27, 2026"}
+        data-complete={countdown && countdown.days === 0 && countdown.hours === 0 && countdown.minutes === 0 && countdown.seconds === 0}
+      >
+        <span className="countdown-label">T−</span>
+        <span className="countdown-unit"><strong>{countdown ? String(countdown.days).padStart(2, "0") : "--"}</strong><small>Days</small></span>
+        <span className="countdown-separator">:</span>
+        <span className="countdown-unit"><strong>{countdown ? String(countdown.hours).padStart(2, "0") : "--"}</strong><small>Hours</small></span>
+        <span className="countdown-separator">:</span>
+        <span className="countdown-unit"><strong>{countdown ? String(countdown.minutes).padStart(2, "0") : "--"}</strong><small>Minutes</small></span>
+        <span className="countdown-separator">:</span>
+        <span className="countdown-unit"><strong>{countdown ? String(countdown.seconds).padStart(2, "0") : "--"}</strong><small>Seconds</small></span>
+        <span className="countdown-zone">{EVENT_TIME_ZONE === "Asia/Kolkata" ? "IST" : EVENT_TIME_ZONE}</span>
+      </div>
+
       <header className="header chrome">
         <button className="menu" type="button" aria-controls="mobile-destinations" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? "Close" : "Destinations"}</button>
         <nav className="mobile-destinations" id="mobile-destinations" aria-label="Planet destinations" hidden={!menuOpen}>
           <p className="destination-heading">Choose a destination</p>
           <div className="destination-options">
             {PLANETS.map(({ key, name }, index) => (
-              <button className={key === planet ? "destination-option active" : "destination-option"} key={key} type="button" aria-current={key === planet ? "step" : undefined} onClick={() => { setMenuOpen(false); void travel(key); }}>
+              <button className={key === selectedPlanet ? "destination-option active" : "destination-option"} key={key} type="button" aria-current={key === selectedPlanet ? "step" : undefined} onClick={() => { setMenuOpen(false); void travel(key); }}>
                 <span className="destination-index">{String(index + 1).padStart(2, "0")}</span>
                 <span>{name}</span>
-                {key === planet && <span className="destination-current">Current</span>}
+                {key === selectedPlanet && <span className="destination-current">Selected</span>}
               </button>
             ))}
           </div>
@@ -524,7 +827,7 @@ export function PlanetPortal() {
       </header>
 
       <aside className={switching ? "planet-list chrome is-switching" : "planet-list chrome"} id="planet-list" aria-label="Choose a destination">
-        {PLANETS.map(({ key, name }) => <button className={key === planet ? "planet-item active" : "planet-item"} key={key} type="button" aria-current={key === planet ? "step" : undefined} onClick={() => { setMenuOpen(false); void travel(key); }}>{name}</button>)}
+        {PLANETS.map(({ key, name }) => <button className={key === selectedPlanet ? "planet-item active" : "planet-item"} key={key} type="button" aria-current={key === selectedPlanet ? "step" : undefined} onClick={() => { setMenuOpen(false); void travel(key); }}>{name}</button>)}
       </aside>
 
       <canvas ref={canvas} className="transition-canvas" aria-hidden="true" />
@@ -536,13 +839,13 @@ export function PlanetPortal() {
           className="about-stage chrome"
           id="planet-content"
           role="region"
-          aria-label="Sun details, About NMFC, and About Technotsav panels. Use the arrow keys or page keys to move between panels."
+          aria-label="Sun details, About NMFC, and About Technotsav panels. Use scrolling, swiping, or arrow keys to move through panels and planets."
           aria-live="polite"
           tabIndex={0}
           onKeyDown={(event) => {
             const direction = ["ArrowDown", "PageDown", " "].includes(event.key) ? "forward"
               : ["ArrowUp", "PageUp"].includes(event.key) ? "backward" : null;
-            if (direction) { event.preventDefault(); moveAboutPanel(direction); }
+            if (direction) { event.preventDefault(); movePanel(direction); }
           }}
         >
           <article className={`about-panel planet-content ${aboutMotionClass(0, aboutPanel, aboutTransition)}`} aria-hidden={aboutPanel !== 0}>
@@ -568,12 +871,26 @@ export function PlanetPortal() {
           })}
         </section>
       ) : (
-        <section className="planet-content chrome" id="planet-content" aria-live="polite" aria-atomic="true">
+        <section
+          className="planet-content chrome"
+          id="planet-content"
+          aria-live="polite"
+          aria-atomic="true"
+          tabIndex={0}
+          aria-label={`${cfg.name} facts. Use scrolling, swiping, or arrow keys to continue to the next planet.`}
+          onKeyDown={(event) => {
+            const direction = ["ArrowDown", "PageDown", " "].includes(event.key) ? "forward"
+              : ["ArrowUp", "PageUp"].includes(event.key) ? "backward" : null;
+            if (direction) { event.preventDefault(); movePanel(direction); }
+          }}
+        >
           <h1>{cfg.name.toUpperCase()}</h1>
           <dl>{cfg.facts.map(([term, value]) => <div className="fact" key={term}><dt>{term}</dt><dd>{value}</dd></div>)}</dl>
         </section>
       )}
-      {planet === "sun" && <div className="scroll-cue" aria-hidden="true"><span>{String(aboutPanel + 1).padStart(2, "0")} / {String(SUN_ABOUT_PANELS.length + 1).padStart(2, "0")} &nbsp;·&nbsp; {aboutPanel === SUN_ABOUT_PANELS.length ? "SCROLL UP TO REVISIT" : "SCROLL TO CONTINUE"}</span><i /> </div>}
+      <div className="scroll-cue" aria-hidden="true">
+        <span>{String(aboutPanel + 1).padStart(2, "0")} / {String(panelCountFor(planet)).padStart(2, "0")} &nbsp;·&nbsp; {aboutPanel < panelCountFor(planet) - 1 ? "SCROLL TO NEXT PANEL" : PLANETS[PLANETS.findIndex(({ key }) => key === planet) + 1] ? `SCROLL TO ${PLANETS[PLANETS.findIndex(({ key }) => key === planet) + 1].name.toUpperCase()}` : "END OF JOURNEY · SCROLL UP TO REVISIT"}</span><i />
+      </div>
       <div className="transition-layer" aria-hidden="true"><video ref={transitionVideo} muted playsInline preload="auto" /></div>
       <div className="loading" aria-live="polite">Preparing orbit…</div>
       <div className="custom-cursor" aria-hidden="true"><span className="cursor-orbit" /><span className="cursor-dot" /><span className="cursor-label">Enter</span></div>
