@@ -7,7 +7,6 @@ import "./planet-portal.css";
 
 type XY = { x: number; y: number };
 type AboutTransition = { from: number; to: number; direction: "forward" | "backward" };
-type TravelRequest = { destination: PlanetKey; panelIndex: number };
 type CountdownParts = { days: number; hours: number; minutes: number; seconds: number };
 type VideoPreloadQueue = {
   items: string[];
@@ -40,8 +39,9 @@ function aboutMotionClass(panelIndex: number, activePanel: number, transition: A
   return panelIndex === activePanel ? "is-settled" : "is-hidden";
 }
 
-function ready(media: HTMLMediaElement, timeout = 4500, requiredState: number = HTMLMediaElement.HAVE_CURRENT_DATA) {
+function ready(media: HTMLMediaElement, timeout = 4500, requiredState: number = HTMLMediaElement.HAVE_CURRENT_DATA, signal?: AbortSignal) {
   return new Promise<boolean>((resolve) => {
+    if (signal?.aborted) return resolve(false);
     if (media.error) return resolve(false);
     if (media.readyState >= requiredState) return resolve(true);
 
@@ -51,6 +51,7 @@ function ready(media: HTMLMediaElement, timeout = 4500, requiredState: number = 
       media.removeEventListener("loadeddata", check);
       media.removeEventListener("canplay", check);
       media.removeEventListener("error", failed);
+      signal?.removeEventListener("abort", aborted);
     };
     const finish = (isReady: boolean) => {
       if (done) return;
@@ -62,21 +63,24 @@ function ready(media: HTMLMediaElement, timeout = 4500, requiredState: number = 
       if (media.readyState >= requiredState) finish(true);
     };
     const failed = () => finish(false);
+    const aborted = () => finish(false);
     const timer = window.setTimeout(() => finish(false), timeout);
 
     media.addEventListener("loadeddata", check);
     media.addEventListener("canplay", check);
     media.addEventListener("error", failed);
+    signal?.addEventListener("abort", aborted, { once: true });
     check();
   });
 }
 
-function playbackEnded(media: HTMLMediaElement, timeout: number) {
+function playbackEnded(media: HTMLMediaElement, timeout: number, signal?: AbortSignal) {
   return new Promise<void>((resolve) => {
     const finish = () => {
       window.clearTimeout(timer);
       media.removeEventListener("ended", finish);
       media.removeEventListener("error", finish);
+      signal?.removeEventListener("abort", finish);
       resolve();
     };
     const timer = window.setTimeout(() => {
@@ -85,6 +89,7 @@ function playbackEnded(media: HTMLMediaElement, timeout: number) {
     }, timeout);
     media.addEventListener("ended", finish, { once: true });
     media.addEventListener("error", finish, { once: true });
+    signal?.addEventListener("abort", finish, { once: true });
   });
 }
 
@@ -247,8 +252,8 @@ export function PlanetPortal() {
   const aboutPanelTimer = useRef<number | null>(null);
   const activeTransition = useRef(false);
   const panelSequenceReady = useRef(false);
-  const queuedTravel = useRef<TravelRequest | null>(null);
   const travelRef = useRef<(destination: PlanetKey, panelIndex?: number) => void>(() => {});
+  const transitionController = useRef<AbortController | null>(null);
   const backgroundPreloadQueue = useRef<VideoPreloadQueue | null>(null);
   const resumeBackgroundPreload = useRef<() => void>(() => {});
   const frozen = useRef(false);
@@ -404,18 +409,29 @@ export function PlanetPortal() {
     }
 
     if (busy.current) {
-      queuedTravel.current = { destination, panelIndex: initialPanel };
-      setSelectedPlanet(destination);
-      return;
+      // A direct planet choice takes priority over an in-flight transition.
+      transitionController.current?.abort();
+      transitionVideo.current?.pause();
+      transitionVideo.current?.removeAttribute("src");
+      transitionVideo.current?.load();
+      activeTransition.current = false;
+      expansion.current = 0;
+      frozen.current = false;
+      busy.current = false;
+      const shell = root.current;
+      shell?.classList.remove("is-transitioning", "is-committing", "is-loading", "is-content-visible", "content-revealing");
+      requestCanvasFrame.current();
     }
 
     busy.current = true;
     panelSequenceReady.current = false;
-    queuedTravel.current = null;
     setSelectedPlanet(destination);
     const video = transitionVideo.current;
     const shell = root.current;
     if (!video || !shell) { setSelectedPlanet(state.current); busy.current = false; return; }
+    const controller = new AbortController();
+    const { signal } = controller;
+    transitionController.current = controller;
 
     let destinationRevealed = false;
     const revealDestination = () => {
@@ -427,6 +443,7 @@ export function PlanetPortal() {
       panelSequenceReady.current = true;
     };
     const finishTravel = () => {
+      if (signal.aborted) return;
       activeTransition.current = false;
       expansion.current = 0;
       frozen.current = false;
@@ -435,15 +452,11 @@ export function PlanetPortal() {
       video.load();
       requestCanvasFrame.current();
       busy.current = false;
-      const queued = queuedTravel.current;
-      queuedTravel.current = null;
-      if (queued && queued.destination !== state.current) {
-        requestAnimationFrame(() => travelRef.current(queued.destination, queued.panelIndex));
-      } else {
-        resumeBackgroundPreload.current();
-      }
+      if (transitionController.current === controller) transitionController.current = null;
+      resumeBackgroundPreload.current();
     };
     const showDestinationWithoutTransition = async () => {
+      if (signal.aborted) return;
       shell.classList.remove("is-transitioning", "is-committing", "is-content-visible", "content-revealing");
       shell.classList.add("is-loading");
       revealDestination();
@@ -451,10 +464,11 @@ export function PlanetPortal() {
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       const background = backgroundVideo.current;
       if (background) {
-        const backgroundReady = ready(background, 4500);
+        const backgroundReady = ready(background, 4500, HTMLMediaElement.HAVE_CURRENT_DATA, signal);
         void background.play().catch(() => undefined);
         await backgroundReady;
       }
+      if (signal.aborted) return;
       shell.classList.remove("is-loading");
       finishTravel();
     };
@@ -467,9 +481,10 @@ export function PlanetPortal() {
       video.src = destinationVideo;
       shell.classList.remove("is-content-visible");
       shell.classList.add("is-loading");
-      const transitionReady = ready(video, 5000, HTMLMediaElement.HAVE_CURRENT_DATA);
+      const transitionReady = ready(video, 5000, HTMLMediaElement.HAVE_CURRENT_DATA, signal);
       video.load();
       if (!(await transitionReady)) {
+        if (signal.aborted) return;
         // Keep navigation usable if the transition asset is slow or unavailable.
         await showDestinationWithoutTransition();
         return;
@@ -482,18 +497,21 @@ export function PlanetPortal() {
       try {
         await video.play();
       } catch {
+        if (signal.aborted) return;
         await showDestinationWithoutTransition();
         return;
       }
+      if (signal.aborted) return;
 
       activeTransition.current = true;
       requestCanvasFrame.current();
-      const ended = playbackEnded(video, Math.min(15000, (video.duration || 8) * 1000 + 1200));
+      const ended = playbackEnded(video, Math.min(15000, (video.duration || 8) * 1000 + 1200), signal);
       const revealTimer = window.setTimeout(revealDestination, 2000);
       await Promise.all([
-        animateValue((v) => { expansion.current = v; }, 1100),
+        animateValue((v) => { if (!signal.aborted) expansion.current = v; }, 1100),
         ended,
       ]);
+      if (signal.aborted) return;
       window.clearTimeout(revealTimer);
       revealDestination();
 
@@ -514,27 +532,34 @@ export function PlanetPortal() {
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       const background = backgroundVideo.current;
       if (background) {
-        const backgroundReady = ready(background, 4500);
+        const backgroundReady = ready(background, 4500, HTMLMediaElement.HAVE_CURRENT_DATA, signal);
         void background.play().catch(() => undefined);
         await backgroundReady;
       }
+      if (signal.aborted) return;
       shell.classList.remove("is-transitioning", "is-content-visible");
       finishTravel();
     } catch {
+      if (signal.aborted) return;
       shell.classList.remove("is-loading", "is-transitioning", "is-committing", "is-content-visible");
       revealDestination();
       setBackgroundPlanet(destination);
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       const background = backgroundVideo.current;
       if (background) {
-        const backgroundReady = ready(background, 4500);
+        const backgroundReady = ready(background, 4500, HTMLMediaElement.HAVE_CURRENT_DATA, signal);
         void background.play().catch(() => undefined);
         await backgroundReady;
       }
+      if (signal.aborted) return;
       finishTravel();
     }
   }, [animateValue, commitState]);
   useEffect(() => { travelRef.current = travel; }, [travel]);
+  useEffect(() => () => {
+    transitionController.current?.abort();
+    transitionVideo.current?.pause();
+  }, []);
 
   useEffect(() => {
     const el = canvas.current;
@@ -645,9 +670,10 @@ export function PlanetPortal() {
   useEffect(() => {
     document.body.classList.remove("preload-complete", "intro-ready", "content-revealing");
     const video = preloaderVideo.current;
-    let finished = false, logoRevealTimer = 0;
+    let finished = false, logoRevealTimer = 0, finishTimer = 0, spaceRevealTimer = 0, spaceVisible = false;
     let counterNode: HTMLElement | null = null;
     if (!video) return;
+    const introStartedAt = performance.now();
     const controller = new AbortController();
     const start = () => {
       document.body.classList.add("intro-ready");
@@ -655,6 +681,11 @@ export function PlanetPortal() {
     };
     const finish = () => {
       if (finished) return;
+      const remainingIntroTime = 5000 - (performance.now() - introStartedAt);
+      if (remainingIntroTime > 0) {
+        if (!finishTimer) finishTimer = window.setTimeout(() => { finishTimer = 0; finish(); }, remainingIntroTime);
+        return;
+      }
       finished = true; controller.abort(); setCounter(100);
       counterNode = document.getElementById("preloader-count");
       counterNode?.classList.add("is-leaving");
@@ -670,12 +701,16 @@ export function PlanetPortal() {
       }, reduceMotion() ? 0 : 2000);
     };
     const begin = () => {
-      if (reduceMotion()) return;
-      video.playbackRate = Math.max(.25, (video.duration || 3) / 3);
+      if (!spaceVisible || reduceMotion()) return;
+      video.playbackRate = 1;
       void video.play().catch(() => undefined);
     };
     video.addEventListener("loadedmetadata", begin, { once: true });
-    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) begin();
+    spaceRevealTimer = window.setTimeout(() => {
+      spaceVisible = true;
+      document.getElementById("preloader")?.classList.add("is-space-visible");
+      if (video.readyState >= HTMLMediaElement.HAVE_METADATA) begin();
+    }, 2500);
 
     const sunDownload = downloadVideoIntoBrowserCache(ASSETS.sunVideo, controller.signal, (progress) => {
       if (!finished) setCounter(Math.min(99, Math.round(progress * 99)));
@@ -694,7 +729,7 @@ export function PlanetPortal() {
     // A broken or blocked media request must not leave the whole experience inaccessible.
     const failSafe = window.setTimeout(finish, 45_000);
     return () => {
-      clearTimeout(failSafe); clearTimeout(logoRevealTimer); controller.abort();
+      clearTimeout(failSafe); clearTimeout(logoRevealTimer); clearTimeout(finishTimer); clearTimeout(spaceRevealTimer); controller.abort();
       video.removeEventListener("loadedmetadata", begin); video.removeEventListener("ended", finish);
       video.removeEventListener("error", finish);
       document.body.classList.remove("preload-complete", "intro-ready", "content-revealing");
@@ -735,11 +770,17 @@ export function PlanetPortal() {
 
   useEffect(() => {
     const background = backgroundVideo.current;
-    if (background && introComplete) {
-      background.pause();
-      background.load();
+    if (!background || !introComplete) return;
+    background.loop = true;
+    background.pause();
+    background.load();
+    const replayOnEnd = () => {
+      background.currentTime = 0;
       void background.play().catch(() => undefined);
-    }
+    };
+    background.addEventListener("ended", replayOnEnd);
+    void background.play().catch(() => undefined);
+    return () => background.removeEventListener("ended", replayOnEnd);
   }, [backgroundPlanet, introComplete]);
 
   useEffect(() => {

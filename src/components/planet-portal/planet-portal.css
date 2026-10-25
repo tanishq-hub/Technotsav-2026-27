@@ -6,6 +6,7 @@
 .backgrounds,.background,.shade,.transition-layer,.transition-layer video{position:absolute;inset:0;width:100%;height:100%}
 .backgrounds{z-index:0;overflow:hidden}.background{object-fit:cover;opacity:0;transition:opacity .8s ease}.background.is-visible{opacity:1}
 .preloader{position:absolute;inset:0;z-index:20;background:#000;overflow:hidden;transition:opacity .7s ease}.preloader video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.preloader video{opacity:0;transition:opacity .45s ease}.preloader.is-space-visible video{opacity:1}
 .preloader-shade{position:absolute;inset:auto 0 0;height:35%;background:linear-gradient(to bottom,transparent,#000);pointer-events:none}
 .preloader.is-background{z-index:0;opacity:0;pointer-events:none}.preloader.is-background .preloader-shade{opacity:0}
 .floating-lockup{position:fixed;z-index:22;left:50%;top:50%;width:var(--initial-edition-width);height:calc(var(--initial-edition-height) + var(--preload-lockup-gap) + 74px);transform:translate(-50%,-50%);will-change:left,top,width,height,transform;transition:left 2s cubic-bezier(.16,1,.3,1),top 2s cubic-bezier(.16,1,.3,1),width 2s cubic-bezier(.16,1,.3,1),height 2s cubic-bezier(.16,1,.3,1),transform 2s cubic-bezier(.16,1,.3,1);pointer-events:none}
@@ -132,6 +133,11 @@ body:not(.intro-ready) .header,body:not(.intro-ready) .planet-list,body:not(.int
 @keyframes planet-title-rise-mobile{from{opacity:0;filter:blur(12px);transform:translate(0,42px)}to{opacity:1;filter:blur(0);transform:translate(0,0)}}
 @media(max-width:640px){.experience{--brand-width:clamp(96px,30vw,132px);--edition-mark-width:clamp(54px,18vw,76px);--lockup-gap:2px;--edition-wordmark-offset:clamp(12px,3.9vw,17px);--edition-vertical-offset:clamp(4px,2vw,9px)}}
 @media(max-width:360px){.menu{padding:0 8px;font-size:9px}}
+
+/* Keep every destination title at a shared scale while allowing the scale to respond to viewport width. */
+.experience[data-planet] .planet-content h1{font-size:clamp(112px,15vw,216px)}
+@media(max-width:900px){.experience[data-planet] .planet-content h1{font-size:clamp(82px,14vw,132px)}}
+@media(max-width:640px){.experience[data-planet] .planet-content h1{font-size:clamp(52px,17vw,88px)}}
 
 /* Countdown and panel visibility while a planet's destination clip is still playing. */
 .event-countdown{position:fixed;z-index:8;top:clamp(14px,2.4vh,24px);left:50%;display:flex;align-items:center;gap:clamp(5px,.8vw,11px);padding:8px 14px;border:1px solid rgba(209,224,255,.17);border-radius:999px;background:linear-gradient(110deg,rgba(3,8,19,.56),rgba(9,17,33,.28));box-shadow:0 8px 30px rgba(0,0,0,.18),inset 0 1px rgba(255,255,255,.08);backdrop-filter:blur(12px);color:#f7f4ec;transform:translate(-50%,-10px);opacity:0;pointer-events:none;transition:opacity .6s ease,transform .6s cubic-bezier(.22,1,.36,1)}
