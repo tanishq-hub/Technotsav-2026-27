@@ -2,7 +2,7 @@ export const R2_MEDIA_ORIGIN = "https://technotsav-media.luckymobilebarhi.in";
 const R2_PLANET_MEDIA = `${R2_MEDIA_ORIGIN}/planets`;
 
 export const ASSETS = {
-  spaceVideo: `${R2_PLANET_MEDIA}/space_v1.mp4`,
+  spaceVideo: `${R2_PLANET_MEDIA}/space_v2.mp4`,
   sunVideo: `${R2_PLANET_MEDIA}/sun_v1.mp4`,
   mercuryVideo: `${R2_PLANET_MEDIA}/mercury_v1.mp4`,
   venusVideo: `${R2_PLANET_MEDIA}/venus_v1.mp4`,

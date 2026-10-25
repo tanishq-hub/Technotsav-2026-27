@@ -6,7 +6,6 @@
 .backgrounds,.background,.shade,.transition-layer,.transition-layer video{position:absolute;inset:0;width:100%;height:100%}
 .backgrounds{z-index:0;overflow:hidden}.background{object-fit:cover;opacity:0;transition:opacity .8s ease}.background.is-visible{opacity:1}
 .preloader{position:absolute;inset:0;z-index:20;background:#000;overflow:hidden;transition:opacity .7s ease}.preloader video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.preloader video{opacity:0;transition:opacity .45s ease}.preloader.is-space-visible video{opacity:1}
 .preloader-shade{position:absolute;inset:auto 0 0;height:35%;background:linear-gradient(to bottom,transparent,#000);pointer-events:none}
 .preloader.is-background{z-index:0;opacity:0;pointer-events:none}.preloader.is-background .preloader-shade{opacity:0}
 .floating-lockup{position:fixed;z-index:22;left:50%;top:50%;width:var(--initial-edition-width);height:calc(var(--initial-edition-height) + var(--preload-lockup-gap) + 74px);transform:translate(-50%,-50%);will-change:left,top,width,height,transform;transition:left 2s cubic-bezier(.16,1,.3,1),top 2s cubic-bezier(.16,1,.3,1),width 2s cubic-bezier(.16,1,.3,1),height 2s cubic-bezier(.16,1,.3,1),transform 2s cubic-bezier(.16,1,.3,1);pointer-events:none}
@@ -21,6 +20,7 @@
 @keyframes theme-reveal-center{from{clip-path:inset(0 50% 0 50%)}to{clip-path:inset(0 0 0 0)}}
 .preloader-count{position:fixed;z-index:22;left:50%;bottom:clamp(22px,3.1vh,28px);display:flex;align-items:flex-end;gap:4px;transform:translateX(-50%);line-height:1;transition:opacity .2s ease}
 .preloader-count>span:first-child{font-family:"SF Pro Thin","SF Pro",Arial,sans-serif;font-size:64px;font-weight:100}.preloader-count .percent{font-size:24px;padding-bottom:4px}
+@media(max-width:640px){.preloader-count>span:first-child,.preloader-count .percent{font-family:"SF Pro",Arial,sans-serif;font-weight:700}}
 .preloader-count.is-leaving{animation:preload-count-out .75s cubic-bezier(.22,1,.36,1) both}
 @keyframes preload-count-out{to{opacity:0;filter:blur(7px);transform:translate(-50%,-34px)}}
 .shade{z-index:1;background:linear-gradient(to bottom,transparent 52%,rgba(0,0,0,.88) 100%);pointer-events:none}

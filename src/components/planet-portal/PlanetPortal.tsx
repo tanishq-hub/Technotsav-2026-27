@@ -121,9 +121,9 @@ function mediaBufferedToEnd(video: HTMLVideoElement) {
   return false;
 }
 
-function waitForFullMediaBuffer(video: HTMLVideoElement, timeout: number, signal: AbortSignal) {
+function waitForFullMediaBuffer(video: HTMLVideoElement, timeout: number, signal: AbortSignal, onProgress?: (progress: number) => void) {
   return new Promise<boolean>((resolve) => {
-    if (mediaBufferedToEnd(video)) return resolve(true);
+    if (mediaBufferedToEnd(video)) { onProgress?.(1); return resolve(true); }
     let done = false;
     const cleanup = () => {
       window.clearTimeout(timer);
@@ -139,7 +139,14 @@ function waitForFullMediaBuffer(video: HTMLVideoElement, timeout: number, signal
       cleanup();
       resolve(result);
     };
-    const check = () => { if (mediaBufferedToEnd(video)) finish(true); };
+    const check = () => {
+      if (Number.isFinite(video.duration) && video.duration > 0) {
+        let bufferedEnd = 0;
+        for (let index = 0; index < video.buffered.length; index += 1) bufferedEnd = Math.max(bufferedEnd, video.buffered.end(index));
+        onProgress?.(Math.min(1, bufferedEnd / video.duration));
+      }
+      if (mediaBufferedToEnd(video)) finish(true);
+    };
     const failed = () => finish(false);
     const aborted = () => finish(false);
     const timer = window.setTimeout(() => finish(false), timeout);
@@ -670,11 +677,23 @@ export function PlanetPortal() {
   useEffect(() => {
     document.body.classList.remove("preload-complete", "intro-ready", "content-revealing");
     const video = preloaderVideo.current;
-    let finished = false, logoRevealTimer = 0, finishTimer = 0, spaceRevealTimer = 0, spaceVisible = false;
+    let finished = false, logoRevealTimer = 0, finishTimer = 0, progressTimer = 0;
     let counterNode: HTMLElement | null = null;
     if (!video) return;
     const introStartedAt = performance.now();
     const controller = new AbortController();
+    let sunProgress = 0, spaceProgress = 0, lastProgress = 0;
+    const updateProgress = () => {
+      const elapsedProgress = video.duration > 0
+        ? Math.min(1, video.currentTime / video.duration)
+        : Math.min(1, (performance.now() - introStartedAt) / 5000);
+      const progress = Math.min(99, Math.floor((sunProgress * 45 + spaceProgress * 45 + elapsedProgress * 9)));
+      if (progress > lastProgress) {
+        lastProgress = progress;
+        setCounter(progress);
+      }
+    };
+    progressTimer = window.setInterval(updateProgress, 100);
     const start = () => {
       document.body.classList.add("intro-ready");
       window.setTimeout(revealContent, reduceMotion() ? 0 : 850);
@@ -686,7 +705,7 @@ export function PlanetPortal() {
         if (!finishTimer) finishTimer = window.setTimeout(() => { finishTimer = 0; finish(); }, remainingIntroTime);
         return;
       }
-      finished = true; controller.abort(); setCounter(100);
+      finished = true; clearInterval(progressTimer); controller.abort(); setCounter(100);
       counterNode = document.getElementById("preloader-count");
       counterNode?.classList.add("is-leaving");
       document.getElementById("floating-lockup")?.classList.add("is-docked");
@@ -701,24 +720,27 @@ export function PlanetPortal() {
       }, reduceMotion() ? 0 : 2000);
     };
     const begin = () => {
-      if (!spaceVisible || reduceMotion()) return;
+      if (reduceMotion()) return;
       video.playbackRate = 1;
       void video.play().catch(() => undefined);
     };
     video.addEventListener("loadedmetadata", begin, { once: true });
-    spaceRevealTimer = window.setTimeout(() => {
-      spaceVisible = true;
-      document.getElementById("preloader")?.classList.add("is-space-visible");
-      if (video.readyState >= HTMLMediaElement.HAVE_METADATA) begin();
-    }, 2500);
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) begin();
 
     const sunDownload = downloadVideoIntoBrowserCache(ASSETS.sunVideo, controller.signal, (progress) => {
-      if (!finished) setCounter(Math.min(99, Math.round(progress * 99)));
+      sunProgress = progress;
+      updateProgress();
     }).catch(() => false);
     const spaceDownload = (async () => {
-      if (await waitForFullMediaBuffer(video, 12_000, controller.signal)) return true;
+      if (await waitForFullMediaBuffer(video, 12_000, controller.signal, (progress) => {
+        spaceProgress = progress;
+        updateProgress();
+      })) return true;
       try {
-        await downloadVideoIntoBrowserCache(ASSETS.spaceVideo, controller.signal);
+        await downloadVideoIntoBrowserCache(ASSETS.spaceVideo, controller.signal, (progress) => {
+          spaceProgress = progress;
+          updateProgress();
+        });
         return true;
       } catch {
         return false;
@@ -729,7 +751,7 @@ export function PlanetPortal() {
     // A broken or blocked media request must not leave the whole experience inaccessible.
     const failSafe = window.setTimeout(finish, 45_000);
     return () => {
-      clearTimeout(failSafe); clearTimeout(logoRevealTimer); clearTimeout(finishTimer); clearTimeout(spaceRevealTimer); controller.abort();
+      clearTimeout(failSafe); clearTimeout(logoRevealTimer); clearTimeout(finishTimer); clearInterval(progressTimer); controller.abort();
       video.removeEventListener("loadedmetadata", begin); video.removeEventListener("ended", finish);
       video.removeEventListener("error", finish);
       document.body.classList.remove("preload-complete", "intro-ready", "content-revealing");
