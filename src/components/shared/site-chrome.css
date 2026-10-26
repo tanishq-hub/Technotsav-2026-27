@@ -35,3 +35,15 @@ html:has(.home-intro) .custom-cursor{opacity:0!important}
 
 /* The wreath's artwork has a higher visual center than its image box; align the visible mark with the full logo lockup. */
 .site-header[data-home-docked="true"] .site-brand-edition{top:calc(50% + 10px)}
+@media(max-width:640px){
+  .site-brand{--brand-width:clamp(104px,29vw,120px);--edition-width:clamp(44px,12vw,52px);--brand-total:calc(var(--edition-width) + var(--brand-width) - 8px);height:60px}
+  .site-brand-wordmark{left:calc(var(--edition-width) - 13px);top:4px}
+  .site-brand-theme{left:calc(var(--edition-width) - 1px);top:36px;width:calc(var(--brand-width) * .76)}
+  .site-countdown{gap:3px;padding-inline:6px}
+  .site-countdown-unit{min-width:18px}
+  .site-countdown-label{font-size:9px}
+  .site-countdown-unit strong{font-size:9px}
+  .site-countdown-unit small{font-size:5px;letter-spacing:.08em}
+  .site-countdown-separator{font-size:8px}
+  .site-countdown-zone{font-size:5px}
+}
