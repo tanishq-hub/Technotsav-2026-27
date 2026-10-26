@@ -141,3 +141,7 @@ html:has(.home-site),body:has(.home-site){height:auto;min-height:100%;overflow-x
   .guide-heading-copy p{font-size:7px;letter-spacing:.1em}
 }
 @media(prefers-reduced-motion:reduce){.guide-panel{animation:none}.home-hero-shade,.home-background-shade{transition:none}}
+
+/* Keep the guide below the taller, three-row mobile site header. */
+@media(max-width:640px){.guide-panel{top:calc(170px + env(safe-area-inset-top));max-height:calc(100dvh - 250px)}}
+@media(max-width:375px){.guide-panel{top:calc(164px + env(safe-area-inset-top));max-height:calc(100dvh - 236px)}}
