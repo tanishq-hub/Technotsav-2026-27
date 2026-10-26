@@ -108,7 +108,6 @@ async function downloadVideoIntoBrowserCache(
 
 export function PlanetPortal() {
   const root = useRef<HTMLElement>(null);
-  const transitionOrigin = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const requestCanvasFrame = useRef<() => void>(() => {});
   const frozenCanvas = useRef<HTMLCanvasElement>(null);
@@ -551,14 +550,15 @@ export function PlanetPortal() {
       }
       ctx.clearRect(0, 0, w, h);
       if (frozen.current) { ctx.drawImage(behind, 0, 0, w, h); shade(ctx); }
-      const rect = transitionOrigin.current?.getBoundingClientRect(), e = expansion.current;
-      if (activeTransition.current && rect && rect.width > 1 && rect.height > 1) {
-        const cx0 = rect.left + rect.width / 2, cy0 = rect.top + rect.height / 2;
-        const cx = cx0 + (w / 2 - cx0) * e, cy = cy0 + (h / 2 - cy0) * e;
-        const scale = 1;
-        const rw = (rect.width + (w - rect.width) * e) * scale;
-        const rh = (rect.height + (h - rect.height) * e) * scale;
-        const radius = Math.min(90 * (1 - e) * scale, rw / 2, rh / 2);
+      const e = expansion.current;
+      if (activeTransition.current) {
+        const startWidth = w <= 640 ? Math.min(260, w * .66) : w <= 900 ? Math.min(300, w * .48) : Math.min(320, w * .31);
+        const startHeight = startWidth * (350 / 320);
+        const startCenterY = h * (w <= 640 ? .44 : w <= 900 ? .43 : .5) - startHeight * .04;
+        const cx = w / 2, cy = startCenterY + (h / 2 - startCenterY) * e;
+        const rw = startWidth + (w - startWidth) * e;
+        const rh = startHeight + (h - startHeight) * e;
+        const radius = Math.min(rw, rh) / 2 * (1 - e);
         const rx = reduceMotion() ? 0 : tilt.current.x * (1 - e);
         const ry = reduceMotion() ? 0 : tilt.current.y * (1 - e);
         if (rw > 1 && rh > 1) {
@@ -710,8 +710,6 @@ export function PlanetPortal() {
       </aside>
 
       <canvas ref={canvas} className="transition-canvas" aria-hidden="true" />
-      {/* Invisible geometry preserves the existing zoom origin without a static planet preview. */}
-      <div ref={transitionOrigin} className="transition-origin" aria-hidden="true" />
 
       {planet === "sun" ? (
         <section
