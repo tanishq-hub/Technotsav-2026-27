@@ -56,7 +56,8 @@ html:has(.home-intro) .custom-cursor{opacity:0!important}
   .site-header[data-home-docked="false"] .site-brand-theme{top:186px}
 }
 @media(max-width:640px){
-  .site-header{height:160px}
+  .site-header{position:absolute;height:160px;transition:transform .48s cubic-bezier(.22,1,.36,1),opacity .32s ease}
+  .site-header[data-mobile-away="true"]{transform:translateY(-110%);opacity:0;pointer-events:none}
   .site-header-inner{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:60px 36px 42px;align-content:start;justify-items:center;gap:4px;padding:10px 14px 0}
   .site-header[data-home-docked="true"] .site-brand{top:10px;left:50%;width:var(--brand-total);height:60px;transform:translateX(-50%)}
   .site-header[data-home-docked="true"] .site-brand{--brand-width:clamp(132px,36vw,152px);--edition-width:clamp(48px,13vw,54px);--brand-total:calc(var(--edition-width) + var(--brand-width) - 8px)}

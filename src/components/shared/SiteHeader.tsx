@@ -24,9 +24,10 @@ function remaining(now: number): CountdownParts {
   };
 }
 
-export function SiteHeader({ activeTab, homeDocked = true, trailing }: {
+export function SiteHeader({ activeTab, homeDocked = true, mobileScrolledAway = false, trailing }: {
   activeTab: SiteTab;
   homeDocked?: boolean;
+  mobileScrolledAway?: boolean;
   trailing?: ReactNode;
 }) {
   const [countdown, setCountdown] = useState<CountdownParts | null>(null);
@@ -43,7 +44,14 @@ export function SiteHeader({ activeTab, homeDocked = true, trailing }: {
     : "to midnight IST on November 27, 2026";
 
   return (
-    <header className="site-header" data-active-tab={activeTab} data-home-docked={homeDocked}>
+    <header
+      className="site-header"
+      data-active-tab={activeTab}
+      data-home-docked={homeDocked}
+      data-mobile-away={mobileScrolledAway}
+      aria-hidden={mobileScrolledAway || undefined}
+      inert={mobileScrolledAway}
+    >
       <div className="site-header-inner">
         <Link className="site-brand" href="/" aria-label="Technotsav, 11th edition, Space × AI — Home">
           <img className="site-brand-edition" src="/technotsav-11th-edition.png" alt="11th edition" />

@@ -109,6 +109,7 @@ export function PlanetPortal() {
   const introComplete = true;
   const [switching, setSwitching] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileHeaderAway, setMobileHeaderAway] = useState(false);
   const [aboutPanel, setAboutPanel] = useState(0);
   const [aboutTransition, setAboutTransition] = useState<AboutTransition | null>(null);
   const state = useRef<PlanetDestination>("mercury");
@@ -154,6 +155,7 @@ export function PlanetPortal() {
     const lastPanel = panelCountFor(currentPlanet) - 1;
     const to = from + (direction === "forward" ? 1 : -1);
     if (to >= 0 && to <= lastPanel) {
+      setMobileHeaderAway(direction === "forward");
       aboutPanelLocked.current = true;
       aboutPanelIndex.current = to;
       setAboutPanel(to);
@@ -173,6 +175,7 @@ export function PlanetPortal() {
   }, []);
 
   const commitState = useCallback((next: PlanetDestination, initialPanel = 0) => {
+    setMobileHeaderAway(false);
     if (state.current !== next) {
       if (aboutPanelTimer.current !== null) window.clearTimeout(aboutPanelTimer.current);
       aboutPanelLocked.current = false;
@@ -608,7 +611,7 @@ export function PlanetPortal() {
   const cfg = PLANET_STATES[planet];
   const event = PLANET_EVENTS[planet];
   const eventEndPanel = event.panels.length + 1;
-  const footerPanel = planet === "neptune" ? eventEndPanel + 1 : -1;
+  const footerPanel = planet === "neptune" ? eventEndPanel : -1;
   const atJourneyEnd = planet === "neptune" && aboutPanel === footerPanel;
   const planetIndex = PLANETS.findIndex(({ key }) => key === planet);
   const nextPlanet = PLANETS[planetIndex + 1];
@@ -626,7 +629,7 @@ export function PlanetPortal() {
           loop
         />
       </div>
-      <SiteHeader activeTab="events" trailing={
+      <SiteHeader activeTab="events" mobileScrolledAway={mobileHeaderAway} trailing={
         <>
           <button className="menu" type="button" aria-controls="mobile-destinations" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? "Close" : "Planets"}</button>
           <nav className="mobile-destinations" id="mobile-destinations" aria-label="Planet destinations" hidden={!menuOpen}>
