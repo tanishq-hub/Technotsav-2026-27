@@ -6,7 +6,7 @@
 - This application is the Technotsav 2026–27 festival website.
 - `/` is the Home experience, `/events` is the immersive planet portal, and `/registration` is the registration information route.
 - Registration details, participant/winner information, and other festival facts must come from the user; do not invent them.
-- The experience begins at the Sun and follows the Solar System order through Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune.
+- The Events experience begins at Mercury and follows the planets through Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune. The Sun video belongs to Registration.
 - The left-side destination list supports direct selection; the portal advances to the next body in that order.
 - Current planet facts are provisional, concise science summaries and may be replaced by user-supplied copy. Keep facts accurate and do not add unsupported festival information.
 
@@ -14,9 +14,11 @@
 
 - Use the existing Next.js App Router, React, TypeScript, and Tailwind CSS 4 setup.
 - Keep route entry points in src/app; reusable experience UI belongs in src/components.
-- Keep the Home and Registration solar-system artwork decorative and CSS-based in src/components/home; it must not add a canvas/3D dependency or intercept input.
-- Use the Space video only as the loading-screen background. After the loading screen exits and Home is visible, preload the Sun video in the background. The Events route starts directly on the Sun video and does not play the Home intro.
-- Keep confirmed college and Technotsav copy in src/lib/planets.ts until it is intentionally moved into a shared content module.
+- Use src/components/shared/SiteHeader.tsx and CustomCursor.tsx for the common fixed brand lockup, IST countdown, route navigation, and pointer treatment across Home, Events, and Registration. Route-specific controls may be supplied to the shared header without replacing its common structure.
+- On Home, keep the logo assets visually centered through the loading screen, then dock the same lockup into the shared header after loading; honor reduced-motion preferences.
+- Use the local `public/solar_system_v2.mp4` video as the muted, looping Home hero background; use the Sun R2 video as the Registration background. Keep decorative CSS artwork where applicable; do not add a canvas/3D dependency for Home or Registration.
+- Use the Space video as the loading-screen background while preloading the local Home solar-system video. Once Home is active, preload the Sun and Mercury videos in parallel for Registration and Events. Events starts directly on Mercury and does not play the Home intro.
+- Keep confirmed planet facts and About copy in src/lib/planets.ts; keep the confirmed event lineup and contact details in src/lib/festival.ts; keep detailed inter-collegiate event-panel copy in src/lib/events.ts.
 - The Home-only Technotsav Guide is a lazy-loaded, local preset-answer interface, not live AI. Use only confirmed copy from `src/data/guide-responses.ts`; keep conversation state in component memory and do not add network calls or persistent chat storage.
 - Shared media URLs and planet data live in src/lib/planets.ts.
 - Keep browser interaction in the focused client component src/components/planet-portal/PlanetPortal.tsx.
@@ -41,6 +43,7 @@
 
 - Use semantic landmarks, real buttons and links, and meaningful accessible labels.
 - Keep all videos muted, inline, and controlled by JavaScript. Preload only what the current route needs, plus at most one next planet while idle.
+- Show the shared college/contact footer on Home and Registration; in Events, show it as the final scroll panel over Neptune's video.
 - Cap canvas pixel ratio at 2 and redraw only while the page is visible.
 - Handle media load/play failures without trapping the page behind the preloader.
 - Avoid unrelated dependencies and backend functionality.

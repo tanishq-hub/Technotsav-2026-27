@@ -1,3 +1,5 @@
+import { FESTIVAL_EVENTS } from "@/lib/festival";
+
 export type GuideIntent = {
   phrases: string[];
   response: string;
@@ -8,12 +10,12 @@ export type GuideIntent = {
 export const GUIDE_INTENTS: GuideIntent[] = [
   {
     phrases: ["when is technotsav", "when is the festival", "festival date", "event date", "date of technotsav", "when does it start"],
-    response: "The current event date is 27 November 2026. The countdown targets 00:00 IST that day; more schedule details have not been provided yet.",
+    response: "The event date shown is Friday, 27 November 2026. The countdown targets 00:00 IST that day; the schedule has not been provided yet.",
     followUps: ["What activities are listed?", "What is Technotsav?", "How can I register?"],
   },
   {
     phrases: ["activities", "events at technotsav", "what events", "competitions", "event list", "which activities"],
-    response: "The activities listed so far are Model Making, Logic Unlock, Digital Detours, Pixarel, Virtual Battle, Robogrip, and Quiztron. More details can be added when they’re confirmed.",
+    response: `The 2026–27 lineup lists ${FESTIVAL_EVENTS.map(({ name, description }) => `${name} (${description})`).join(", ")}.`,
     followUps: ["What is Technotsav?", "When is the festival?", "Tell me about NMFC"],
   },
   {

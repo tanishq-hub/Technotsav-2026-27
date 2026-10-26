@@ -3,6 +3,7 @@ const R2_PLANET_MEDIA = `${R2_MEDIA_ORIGIN}/planets`;
 
 export const ASSETS = {
   spaceVideo: `${R2_PLANET_MEDIA}/space_v2.mp4`,
+  solarSystemVideo: "/solar_system_v2.mp4",
   sunVideo: `${R2_PLANET_MEDIA}/sun_v1.mp4`,
   mercuryVideo: `${R2_PLANET_MEDIA}/mercury_v1.mp4`,
   venusVideo: `${R2_PLANET_MEDIA}/venus_v1.mp4`,
@@ -15,6 +16,7 @@ export const ASSETS = {
 } as const;
 
 export type PlanetKey = "sun" | "mercury" | "venus" | "earth" | "mars" | "jupiter" | "saturn" | "uranus" | "neptune";
+export type PlanetDestination = Exclude<PlanetKey, "sun">;
 
 export type AboutPanel = {
   section: "ABOUT NMFC" | "ABOUT TECHNOTSAV";
@@ -55,29 +57,27 @@ export const SUN_ABOUT_PANELS: AboutPanel[] = [
     section: "ABOUT TECHNOTSAV",
     title: "A one-day festival on campus",
     paragraphs: [
-      "The activities culminate in a grand one-day festival held on the NMFC campus. The event features the following activities:",
+      "The activities culminate in a grand one-day intercollegiate festival held on the NMFC campus.",
       "With each passing year, we anticipate the event will attract an increasing number of participants due to the enthusiasm and energy it has fostered.",
       "On the occasion of Technotsav, we invite dignitaries and academicians from the field of education from various universities and colleges, as well as other reputable IT industries.",
     ],
-    highlights: ["Model Making", "Logic Unlock", "Digital Detours", "Pixarel", "Virtual Battle", "Robogrip", "Quiztron"],
   },
 ];
 
-export const PLANETS: { key: PlanetKey; name: string }[] = [
-  { key: "sun", name: "Sun" },
-  { key: "mercury", name: "Mercury" },
-  { key: "venus", name: "Venus" },
-  { key: "earth", name: "Earth" },
-  { key: "mars", name: "Mars" },
-  { key: "jupiter", name: "Jupiter" },
-  { key: "saturn", name: "Saturn" },
-  { key: "uranus", name: "Uranus" },
-  { key: "neptune", name: "Neptune" },
+export const PLANETS: { key: PlanetDestination; name: string }[] = [
+  { key: "mercury", name: "Code in Dark" },
+  { key: "venus", name: "Web Verse" },
+  { key: "earth", name: "Cosmic Hunt" },
+  { key: "mars", name: "Cyber Arena" },
+  { key: "jupiter", name: "Astro Bots" },
+  { key: "saturn", name: "Orbit Hack" },
+  { key: "uranus", name: "The Cosmic Matrix" },
+  { key: "neptune", name: "Astro Bitz" },
 ];
 
 type PlanetState = {
   name: string;
-  next: PlanetKey | null;
+  next: PlanetDestination | null;
   number: string;
   background: string;
   facts: [string, string][];

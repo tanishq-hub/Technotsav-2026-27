@@ -5,25 +5,16 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { ASSETS, R2_MEDIA_ORIGIN, SUN_ABOUT_PANELS } from "@/lib/planets";
-import { EVENT_TIME_ZONE, TECHNOTSAV_EVENT_START } from "@/lib/event-time";
-import { SolarSystemArtwork } from "@/components/home/SolarSystemArtwork";
+import { FESTIVAL_DETAILS, FESTIVAL_EVENTS } from "@/lib/festival";
+import { SiteFooter } from "@/components/shared/SiteFooter";
+import { SiteHeader } from "@/components/shared/SiteHeader";
+import { CustomCursor } from "@/components/shared/CustomCursor";
 import "./home-experience.css";
 
 const TechnotsavGuide = dynamic(
   () => import("@/components/home/TechnotsavGuide").then((module) => module.TechnotsavGuide),
   { loading: () => <div className="guide-loading" role="status">Opening the preset guide…</div> },
 );
-
-function remaining(now: number) {
-  const seconds = Math.max(0, Math.floor((TECHNOTSAV_EVENT_START - now) / 1000));
-  return {
-    days: Math.floor(seconds / 86400),
-    hours: Math.floor((seconds % 86400) / 3600),
-    minutes: Math.floor((seconds % 3600) / 60),
-    seconds: seconds % 60,
-  };
-}
-type Countdown = ReturnType<typeof remaining>;
 
 function isFullyBuffered(video: HTMLVideoElement) {
   for (let index = 0; index < video.buffered.length; index += 1) {
@@ -84,9 +75,10 @@ async function preloadVideo(url: string, signal: AbortSignal, onProgress: (fract
 
 export function HomeExperience() {
   const spaceVideo = useRef<HTMLVideoElement>(null);
-  const [countdown, setCountdown] = useState<Countdown | null>(null);
+  const solarSystemVideo = useRef<HTMLVideoElement>(null);
   const [introVisible, setIntroVisible] = useState(true);
   const [introLeaving, setIntroLeaving] = useState(false);
+  const [homeReady, setHomeReady] = useState(false);
   const [progress, setProgress] = useState(0);
   const [guideOpen, setGuideOpen] = useState(false);
   const guideButton = useRef<HTMLButtonElement>(null);
@@ -97,19 +89,53 @@ export function HomeExperience() {
   };
 
   useEffect(() => {
-    const update = () => setCountdown(remaining(Date.now()));
-    const firstFrame = requestAnimationFrame(update);
-    const timer = window.setInterval(update, 1000);
-    return () => { cancelAnimationFrame(firstFrame); window.clearInterval(timer); };
-  }, []);
+    if (!homeReady) return;
+    const controller = new AbortController();
+    // Warm both route entry videos in parallel while the visitor is on Home.
+    void Promise.all([
+      preloadVideo(ASSETS.sunVideo, controller.signal).catch(() => undefined),
+      preloadVideo(ASSETS.mercuryVideo, controller.signal).catch(() => undefined),
+    ]);
+    return () => controller.abort();
+  }, [homeReady]);
 
   useEffect(() => {
     if (introVisible) return;
-    const controller = new AbortController();
-    // Home's CSS solar system is now visible. Warm the Sun video quietly so
-    // Events can begin on it without loading it during the Space intro.
-    void preloadVideo(ASSETS.sunVideo, controller.signal).catch(() => undefined);
-    return () => controller.abort();
+    const video = solarSystemVideo.current;
+    if (!video) { setHomeReady(true); return; }
+
+    let revealTimer = 0;
+    let revealScheduled = false;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const revealAfterTwoSeconds = () => {
+      if (revealScheduled) return;
+      revealScheduled = true;
+      revealTimer = window.setTimeout(() => setHomeReady(true), 2000);
+    };
+    const revealOnFailure = () => setHomeReady(true);
+    const onLoadedData = () => { if (reducedMotion) revealAfterTwoSeconds(); };
+    // Do not leave the page hidden if a video host or autoplay policy fails.
+    const failSafe = window.setTimeout(revealOnFailure, 15_000);
+
+    video.addEventListener("playing", revealAfterTwoSeconds, { once: true });
+    video.addEventListener("loadeddata", onLoadedData, { once: true });
+    video.addEventListener("error", revealOnFailure, { once: true });
+    video.preload = "auto";
+    video.load();
+
+    if (reducedMotion) {
+      video.pause();
+    } else {
+      void video.play().catch(revealOnFailure);
+    }
+
+    return () => {
+      window.clearTimeout(revealTimer);
+      window.clearTimeout(failSafe);
+      video.removeEventListener("playing", revealAfterTwoSeconds);
+      video.removeEventListener("loadeddata", onLoadedData);
+      video.removeEventListener("error", revealOnFailure);
+    };
   }, [introVisible]);
 
   useEffect(() => {
@@ -119,9 +145,11 @@ export function HomeExperience() {
     let failSafe = 0;
     let exitTimer = 0;
     let spaceProgress = 0;
+    let solarProgress = 0;
     const update = window.setInterval(() => {
       const elapsed = Math.min(1, (performance.now() - startedAt) / 5000);
-      setProgress(Math.min(99, Math.floor(spaceProgress * 89 + elapsed * 10)));
+      const combinedProgress = (spaceProgress + solarProgress) / 2;
+      setProgress(Math.min(99, Math.floor(combinedProgress * 89 + elapsed * 10)));
     }, 80);
     const spaceElement = spaceVideo.current;
     const spacePreload = async () => {
@@ -130,9 +158,16 @@ export function HomeExperience() {
         await preloadVideo(ASSETS.spaceVideo, controller.signal, (value) => { spaceProgress = value; });
       } catch { /* the Home page remains usable if the loading-screen video host is unavailable */ }
     };
+    const solarController = new AbortController();
+    const abortSolarPreload = () => solarController.abort();
+    controller.signal.addEventListener("abort", abortSolarPreload, { once: true });
+    const solarFailSafe = window.setTimeout(abortSolarPreload, 15_000);
+    const solarPreload = preloadVideo(ASSETS.solarSystemVideo, solarController.signal, (value) => { solarProgress = value; })
+      .catch(() => { solarProgress = 1; })
+      .finally(() => window.clearTimeout(solarFailSafe));
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (spaceElement && !prefersReducedMotion) void spaceElement.play().catch(() => undefined);
-    void spacePreload().then(() => {
+    void Promise.all([spacePreload(), solarPreload]).then(() => {
       const remainingMs = Math.max(0, 5000 - (performance.now() - startedAt));
       exitTimer = window.setTimeout(() => {
         if (cancelled) return;
@@ -143,6 +178,8 @@ export function HomeExperience() {
     });
     failSafe = window.setTimeout(() => {
       controller.abort();
+      window.clearTimeout(solarFailSafe);
+      controller.signal.removeEventListener("abort", abortSolarPreload);
       if (cancelled) return;
       setProgress(100);
       setIntroLeaving(true);
@@ -154,23 +191,29 @@ export function HomeExperience() {
       window.clearInterval(update);
       window.clearTimeout(failSafe);
       window.clearTimeout(exitTimer);
+      window.clearTimeout(solarFailSafe);
+      controller.signal.removeEventListener("abort", abortSolarPreload);
     };
   }, []);
 
   return (
-    <main className="home-site">
-      <header className="home-header">
-        <Link className="home-brand" href="/" aria-label="Technotsav home">
-          <img src="/technotsav-wordmark-horizontal.png" alt="Technotsav" />
-          <span>SPACE <i>×</i> AI</span>
-        </Link>
-        <nav className="home-nav" aria-label="Main navigation">
-          <Link href="/" aria-current="page">Home</Link><Link href="/events">Events</Link><Link href="/registration">Registration</Link>
-        </nav>
-      </header>
+    <>
+      <SiteHeader activeTab="home" homeDocked={!introVisible} />
+      <CustomCursor />
+      <main className={homeReady ? "home-site is-ready" : "home-site"}>
 
       <section className="home-hero" aria-labelledby="home-title">
-        <SolarSystemArtwork className="home-solar-art" />
+        <video
+          ref={solarSystemVideo}
+          className="home-hero-video"
+          src={ASSETS.solarSystemVideo}
+          muted
+          loop
+          playsInline
+          preload="none"
+          aria-hidden="true"
+          tabIndex={-1}
+        />
         <div className="home-hero-shade" />
         <div className="home-hero-copy">
           <p className="home-eyebrow">11th edition <span>·</span> 2026–27</p>
@@ -178,13 +221,6 @@ export function HomeExperience() {
           <h1 id="home-title">Decoding Infinity.<br /><em>Defining Tomorrow.</em></h1>
           <p className="home-theme">A journey through <strong>Space × AI</strong></p>
           <Link className="home-cta" href="/events">Explore the planets <span aria-hidden="true">↗</span></Link>
-        </div>
-        <div className="home-countdown" role="timer" aria-label={countdown ? `Technotsav begins in ${countdown.days} days, ${countdown.hours} hours, ${countdown.minutes} minutes, and ${countdown.seconds} seconds, India time` : "Countdown to Technotsav in India time"}>
-          <span className="home-countdown-label">T−</span>
-          <span>{countdown ? String(countdown.days).padStart(2, "0") : "--"}<small>days</small></span><i>:</i>
-          <span>{countdown ? String(countdown.hours).padStart(2, "0") : "--"}<small>hours</small></span><i>:</i>
-          <span>{countdown ? String(countdown.minutes).padStart(2, "0") : "--"}<small>min</small></span><i>:</i>
-          <span>{countdown ? String(countdown.seconds).padStart(2, "0") : "--"}<small>sec</small></span><b>{EVENT_TIME_ZONE === "Asia/Kolkata" ? "IST" : EVENT_TIME_ZONE}</b>
         </div>
         <a className="home-scroll" href="#about">Scroll to explore <span aria-hidden="true">↓</span></a>
       </section>
@@ -197,14 +233,39 @@ export function HomeExperience() {
           </article>
           <article className="about-card about-festival"><p className="home-eyebrow">About Technotsav</p><h3>A technical festival since 2013</h3>
             {SUN_ABOUT_PANELS.slice(2).flatMap((panel) => panel.paragraphs).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
-            <ul>{SUN_ABOUT_PANELS[3].highlights?.map((item) => <li key={item}>{item}</li>)}</ul>
           </article>
         </div>
+        <section className="home-event-lineup" aria-labelledby="event-lineup-title">
+          <div className="home-event-heading">
+            <div><p className="home-eyebrow">2026–27 event lineup</p><h3 id="event-lineup-title">Eight ways to join the orbit.</h3><p className="home-event-departments">Presented by {FESTIVAL_DETAILS.departments}</p></div>
+            <p className="home-event-date">{FESTIVAL_DETAILS.date}</p>
+          </div>
+          <div className="home-event-grid">
+            {FESTIVAL_EVENTS.map((event, index) => (
+              <article className="home-event-card" key={event.name}>
+                <span className="home-event-index">{String(index + 1).padStart(2, "0")}</span>
+                <h4>{event.name}</h4>
+                <p>{event.description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
         <div className="home-about-action"><p>Explore the planets and their event panels.</p><Link className="home-cta" href="/events">Enter the event experience <span aria-hidden="true">↗</span></Link></div>
       </section>
 
-      <footer className="home-footer"><span>Technotsav 2026–27 · Space × AI</span><span>Decoding Infinity. Defining Tomorrow.</span></footer>
+      <SiteFooter />
 
+      {introVisible && <div className={introLeaving ? "home-intro is-leaving" : "home-intro"} role="status" aria-live="polite" aria-label={`Loading Technotsav ${progress}%`}>
+        <video ref={spaceVideo} className="home-intro-video" src={ASSETS.spaceVideo} muted playsInline preload="auto" crossOrigin={ASSETS.spaceVideo.startsWith(`${R2_MEDIA_ORIGIN}/`) ? "anonymous" : undefined} />
+        <div className="home-intro-vignette" />
+        <div className="home-intro-brand">
+          <img className="home-intro-edition" src="/technotsav-11th-edition.png" alt="" />
+          <img className="home-intro-wordmark" src="/technotsav-wordmark-horizontal.png" alt="Technotsav" />
+          <img className="home-intro-theme" src="/technotsav-space-ai.png" alt="Space × AI" />
+        </div>
+        <p className="home-intro-progress">{progress}<b>%</b></p>
+      </div>}
+      </main>
       {!introVisible && <>
         <button
           className="guide-launcher"
@@ -219,17 +280,6 @@ export function HomeExperience() {
         </button>
         {guideOpen && <TechnotsavGuide onClose={closeGuide} />}
       </>}
-
-      {introVisible && <div className={introLeaving ? "home-intro is-leaving" : "home-intro"} role="status" aria-live="polite" aria-label={`Loading Technotsav ${progress}%`}>
-        <video ref={spaceVideo} className="home-intro-video" src={ASSETS.spaceVideo} muted playsInline preload="auto" crossOrigin={ASSETS.spaceVideo.startsWith(`${R2_MEDIA_ORIGIN}/`) ? "anonymous" : undefined} />
-        <div className="home-intro-vignette" />
-        <div className="home-intro-brand">
-          <img className="home-intro-edition" src="/technotsav-11th-edition.png" alt="" />
-          <img className="home-intro-wordmark" src="/technotsav-wordmark-horizontal.png" alt="Technotsav" />
-          <img className="home-intro-theme" src="/technotsav-space-ai.png" alt="Space × AI" />
-        </div>
-        <p className="home-intro-progress">{progress}<b>%</b></p>
-      </div>}
-    </main>
+    </>
   );
 }

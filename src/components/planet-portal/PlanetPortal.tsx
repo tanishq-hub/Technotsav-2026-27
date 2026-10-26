@@ -1,29 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { PLANETS, PLANET_STATES, R2_MEDIA_ORIGIN, SUN_ABOUT_PANELS, type PlanetKey } from "@/lib/planets";
-import { EVENT_TIME_ZONE, TECHNOTSAV_EVENT_START } from "@/lib/event-time";
+import { PLANETS, PLANET_STATES, R2_MEDIA_ORIGIN, type PlanetDestination } from "@/lib/planets";
+import { PLANET_EVENTS } from "@/lib/events";
+import { SiteFooter } from "@/components/shared/SiteFooter";
+import { SiteHeader } from "@/components/shared/SiteHeader";
+import { CustomCursor } from "@/components/shared/CustomCursor";
 import "./planet-portal.css";
 
 type XY = { x: number; y: number };
 type AboutTransition = { from: number; to: number; direction: "forward" | "backward" };
-type CountdownParts = { days: number; hours: number; minutes: number; seconds: number };
 const ease = (t: number) => t < .5 ? 4 * t ** 3 : 1 - Math.pow(-2 * t + 2, 3) / 2;
 const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-function panelCountFor(planet: PlanetKey) {
-  return planet === "sun" ? SUN_ABOUT_PANELS.length + 1 : 1;
-}
-
-function countdownUntilEvent(now: number): CountdownParts {
-  const totalSeconds = Math.max(0, Math.floor((TECHNOTSAV_EVENT_START - now) / 1000));
-  return {
-    days: Math.floor(totalSeconds / 86_400),
-    hours: Math.floor((totalSeconds % 86_400) / 3_600),
-    minutes: Math.floor((totalSeconds % 3_600) / 60),
-    seconds: totalSeconds % 60,
-  };
+function panelCountFor(planet: PlanetDestination) {
+  return 1 + PLANET_EVENTS[planet].panels.length + (planet === "neptune" ? 1 : 0);
 }
 
 function aboutMotionClass(panelIndex: number, activePanel: number, transition: AboutTransition | null) {
@@ -113,16 +104,15 @@ export function PlanetPortal() {
   const frozenCanvas = useRef<HTMLCanvasElement>(null);
   const backgroundVideo = useRef<HTMLVideoElement>(null);
   const transitionVideo = useRef<HTMLVideoElement>(null);
-  const [planet, setPlanet] = useState<PlanetKey>("sun");
-  const [backgroundPlanet, setBackgroundPlanet] = useState<PlanetKey>("sun");
-  const [selectedPlanet, setSelectedPlanet] = useState<PlanetKey>("sun");
-  const [countdown, setCountdown] = useState<CountdownParts | null>(null);
+  const [planet, setPlanet] = useState<PlanetDestination>("mercury");
+  const [backgroundPlanet, setBackgroundPlanet] = useState<PlanetDestination>("mercury");
+  const [selectedPlanet, setSelectedPlanet] = useState<PlanetDestination>("mercury");
   const introComplete = true;
   const [switching, setSwitching] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [aboutPanel, setAboutPanel] = useState(0);
   const [aboutTransition, setAboutTransition] = useState<AboutTransition | null>(null);
-  const state = useRef<PlanetKey>("sun");
+  const state = useRef<PlanetDestination>("mercury");
   const tilt = useRef<XY>({ x: 0, y: 0 });
   const targetTilt = useRef<XY>({ x: 0, y: 0 });
   const expansion = useRef(0);
@@ -131,7 +121,7 @@ export function PlanetPortal() {
   const aboutPanelTimer = useRef<number | null>(null);
   const activeTransition = useRef(false);
   const panelSequenceReady = useRef(false);
-  const travelRef = useRef<(destination: PlanetKey, panelIndex?: number) => void>(() => {});
+  const travelRef = useRef<(destination: PlanetDestination, panelIndex?: number) => void>(() => {});
   const transitionController = useRef<AbortController | null>(null);
   const idlePreloadController = useRef<AbortController | null>(null);
   const frozen = useRef(false);
@@ -168,7 +158,7 @@ export function PlanetPortal() {
       aboutPanelLocked.current = true;
       aboutPanelIndex.current = to;
       setAboutPanel(to);
-      if (currentPlanet === "sun") setAboutTransition({ from, to, direction });
+      setAboutTransition({ from, to, direction });
       aboutPanelTimer.current = window.setTimeout(() => {
         setAboutTransition(null);
         aboutPanelLocked.current = false;
@@ -180,11 +170,10 @@ export function PlanetPortal() {
     const planetPosition = PLANETS.findIndex(({ key }) => key === currentPlanet);
     const adjacent = PLANETS[planetPosition + (direction === "forward" ? 1 : -1)];
     if (!adjacent) return;
-    const destinationPanel = direction === "forward" ? 0 : panelCountFor(adjacent.key) - 1;
-    travelRef.current(adjacent.key, destinationPanel);
+    travelRef.current(adjacent.key, 0);
   }, []);
 
-  const commitState = useCallback((next: PlanetKey, initialPanel = 0) => {
+  const commitState = useCallback((next: PlanetDestination, initialPanel = 0) => {
     if (state.current !== next) {
       if (aboutPanelTimer.current !== null) window.clearTimeout(aboutPanelTimer.current);
       aboutPanelLocked.current = false;
@@ -206,13 +195,6 @@ export function PlanetPortal() {
   }, []);
 
   useEffect(() => {
-    const update = () => setCountdown(countdownUntilEvent(Date.now()));
-    update();
-    const interval = window.setInterval(update, 1000);
-    return () => window.clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
     const shell = root.current;
     if (!shell) return;
     let touchY: number | null = null;
@@ -220,7 +202,7 @@ export function PlanetPortal() {
     let wheelConsumed = false;
     let wheelIdleTimer = 0;
     const ignoredTarget = (target: EventTarget | null) =>
-      target instanceof Element && Boolean(target.closest(".planet-list, .header, button, a"));
+      target instanceof Element && Boolean(target.closest(".planet-list, .site-header, button, a"));
     const wheel = (event: WheelEvent) => {
       if (event.ctrlKey || Math.abs(event.deltaY) < Math.abs(event.deltaX) || ignoredTarget(event.target)) return;
       event.preventDefault();
@@ -278,7 +260,7 @@ export function PlanetPortal() {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [menuOpen]);
 
-  const travel = useCallback(async (destination: PlanetKey, initialPanel = 0) => {
+  const travel = useCallback(async (destination: PlanetDestination, initialPanel = 0) => {
     if (!busy.current && state.current === destination) return;
     if (busy.current) {
       // A direct planet choice takes priority over an in-flight transition.
@@ -605,8 +587,6 @@ export function PlanetPortal() {
 
   useLayoutEffect(() => {
     document.body.classList.add("preload-complete", "intro-ready");
-    document.getElementById("floating-lockup")?.classList.add("is-docked", "is-settled");
-    document.getElementById("floating-theme")?.classList.add("is-revealing");
     return () => document.body.classList.remove("preload-complete", "intro-ready", "content-revealing");
   }, []);
 
@@ -625,28 +605,15 @@ export function PlanetPortal() {
     return () => background.removeEventListener("ended", replayOnEnd);
   }, [backgroundPlanet, introComplete]);
 
-  useEffect(() => {
-    const cursor = document.querySelector<HTMLElement>(".custom-cursor");
-    if (!cursor || reduceMotion() || !matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-    let x = 0, y = 0, tx = 0, ty = 0, raf = 0;
-    const loop = () => {
-      x += (tx - x) * .2; y += (ty - y) * .2;
-      cursor.style.transform = `translate3d(${x}px,${y}px,0)`;
-      if (Math.abs(tx - x) + Math.abs(ty - y) > .25) raf = requestAnimationFrame(loop);
-      else { x = tx; y = ty; raf = 0; }
-    };
-    const move = (e: PointerEvent) => {
-      tx = e.clientX; ty = e.clientY; cursor.classList.add("is-visible");
-      if (!raf) raf = requestAnimationFrame(loop);
-    };
-    const leave = () => { cursor.classList.remove("is-visible"); cancelAnimationFrame(raf); raf = 0; };
-    addEventListener("pointermove", move); document.addEventListener("pointerleave", leave);
-    return () => { cancelAnimationFrame(raf); removeEventListener("pointermove", move); document.removeEventListener("pointerleave", leave); };
-  }, []);
-
   const cfg = PLANET_STATES[planet];
+  const event = PLANET_EVENTS[planet];
+  const eventEndPanel = event.panels.length + 1;
+  const footerPanel = planet === "neptune" ? eventEndPanel + 1 : -1;
+  const atJourneyEnd = planet === "neptune" && aboutPanel === footerPanel;
+  const planetIndex = PLANETS.findIndex(({ key }) => key === planet);
+  const nextPlanet = PLANETS[planetIndex + 1];
   return (
-    <main className="experience" data-planet={planet} data-selected-planet={selectedPlanet} ref={root} aria-label="Planet Jumping experience">
+    <main className="experience" data-planet={planet} data-selected-planet={selectedPlanet} data-end-panel={atJourneyEnd} ref={root} aria-label="Technotsav planet experience">
       <div className="backgrounds" aria-hidden="true">
         <video
           ref={backgroundVideo}
@@ -659,51 +626,26 @@ export function PlanetPortal() {
           loop
         />
       </div>
-      <div className="floating-lockup" id="floating-lockup" role="group" aria-label="Technotsav 11th edition logo">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="floating-edition" src="/technotsav-11th-edition.png" alt="11th edition" />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="floating-logo" src="/technotsav-wordmark-horizontal.png" alt="Technotsav" />
-      </div>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img className="floating-theme" id="floating-theme" src="/technotsav-space-ai.png" alt="Space × AI" />
+      <SiteHeader activeTab="events" trailing={
+        <>
+          <button className="menu" type="button" aria-controls="mobile-destinations" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? "Close" : "Planets"}</button>
+          <nav className="mobile-destinations" id="mobile-destinations" aria-label="Planet destinations" hidden={!menuOpen}>
+            <p className="destination-heading">Choose a destination</p>
+            <div className="destination-options">
+              {PLANETS.map(({ key, name }, index) => (
+                <button className={key === selectedPlanet ? "destination-option active" : "destination-option"} key={key} type="button" aria-current={key === selectedPlanet ? "step" : undefined} onClick={() => { setMenuOpen(false); void travel(key); }}>
+                  <span className="destination-index">{String(index + 1).padStart(2, "0")}</span>
+                  <span>{name}</span>
+                  {key === selectedPlanet && <span className="destination-current">Selected</span>}
+                </button>
+              ))}
+            </div>
+          </nav>
+        </>
+      } />
+      <CustomCursor />
       <canvas ref={frozenCanvas} className="scene-canvas" aria-hidden="true" />
       <div className="shade" aria-hidden="true" />
-
-      <div
-        className="event-countdown"
-        role="timer"
-        aria-live="off"
-        aria-label={countdown ? `Technotsav countdown: ${countdown.days} days, ${countdown.hours} hours, ${countdown.minutes} minutes, ${countdown.seconds} seconds to midnight IST on November 27, 2026` : "Technotsav countdown to midnight IST on November 27, 2026"}
-        data-complete={countdown && countdown.days === 0 && countdown.hours === 0 && countdown.minutes === 0 && countdown.seconds === 0}
-      >
-        <span className="countdown-label">T−</span>
-        <span className="countdown-unit"><strong>{countdown ? String(countdown.days).padStart(2, "0") : "--"}</strong><small>Days</small></span>
-        <span className="countdown-separator">:</span>
-        <span className="countdown-unit"><strong>{countdown ? String(countdown.hours).padStart(2, "0") : "--"}</strong><small>Hours</small></span>
-        <span className="countdown-separator">:</span>
-        <span className="countdown-unit"><strong>{countdown ? String(countdown.minutes).padStart(2, "0") : "--"}</strong><small>Minutes</small></span>
-        <span className="countdown-separator">:</span>
-        <span className="countdown-unit"><strong>{countdown ? String(countdown.seconds).padStart(2, "0") : "--"}</strong><small>Seconds</small></span>
-        <span className="countdown-zone">{EVENT_TIME_ZONE === "Asia/Kolkata" ? "IST" : EVENT_TIME_ZONE}</span>
-      </div>
-
-      <header className="header chrome">
-        <nav className="portal-nav" aria-label="Main navigation"><Link href="/">Home</Link><Link href="/events" aria-current="page">Events</Link><Link href="/registration">Registration</Link></nav>
-        <button className="menu" type="button" aria-controls="mobile-destinations" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? "Close" : "Planets"}</button>
-        <nav className="mobile-destinations" id="mobile-destinations" aria-label="Planet destinations" hidden={!menuOpen}>
-          <p className="destination-heading">Choose a destination</p>
-          <div className="destination-options">
-            {PLANETS.map(({ key, name }, index) => (
-              <button className={key === selectedPlanet ? "destination-option active" : "destination-option"} key={key} type="button" aria-current={key === selectedPlanet ? "step" : undefined} onClick={() => { setMenuOpen(false); void travel(key); }}>
-                <span className="destination-index">{String(index + 1).padStart(2, "0")}</span>
-                <span>{name}</span>
-                {key === selectedPlanet && <span className="destination-current">Selected</span>}
-              </button>
-            ))}
-          </div>
-        </nav>
-      </header>
 
       <aside className={switching ? "planet-list chrome is-switching" : "planet-list chrome"} id="planet-list" aria-label="Choose a destination">
         {PLANETS.map(({ key, name }) => <button className={key === selectedPlanet ? "planet-item active" : "planet-item"} key={key} type="button" aria-current={key === selectedPlanet ? "step" : undefined} onClick={() => { setMenuOpen(false); void travel(key); }}>{name}</button>)}
@@ -711,66 +653,80 @@ export function PlanetPortal() {
 
       <canvas ref={canvas} className="transition-canvas" aria-hidden="true" />
 
-      {planet === "sun" ? (
-        <section
-          className="about-stage chrome"
-          id="planet-content"
-          role="region"
-          aria-label="Sun details, About NMFC, and About Technotsav panels. Use scrolling, swiping, or arrow keys to move through panels and planets."
-          aria-live="polite"
-          tabIndex={0}
-          onKeyDown={(event) => {
-            const direction = ["ArrowDown", "PageDown", " "].includes(event.key) ? "forward"
-              : ["ArrowUp", "PageUp"].includes(event.key) ? "backward" : null;
-            if (direction) { event.preventDefault(); movePanel(direction); }
-          }}
-        >
-          <article className={`about-panel planet-content ${aboutMotionClass(0, aboutPanel, aboutTransition)}`} aria-hidden={aboutPanel !== 0}>
-            <h1>{cfg.name.toUpperCase()}</h1>
-            <dl>{cfg.facts.map(([term, value]) => <div className="fact" key={term}><dt>{term}</dt><dd>{value}</dd></div>)}</dl>
-            <div className="about-panel-count" aria-hidden="true">01 <span>/</span> {String(SUN_ABOUT_PANELS.length + 1).padStart(2, "0")}</div>
-          </article>
-          {SUN_ABOUT_PANELS.map((panel, index) => {
-            const panelIndex = index + 1;
-            return (
-              <article className={`about-panel ${aboutMotionClass(panelIndex, aboutPanel, aboutTransition)}`} key={`${panel.section}-${index}`} aria-hidden={panelIndex !== aboutPanel}>
-                <div className="about-panel-title">
-                  <p className="about-panel-section">{panel.section}</p>
-                  <h1>{panel.title}</h1>
-                </div>
-                <div className="about-panel-body">
-                  {panel.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
-                  {panel.highlights && <ul className="about-highlights">{panel.highlights.map((highlight) => <li key={highlight}>{highlight}</li>)}</ul>}
-                </div>
-                <div className="about-panel-count" aria-hidden="true">{String(panelIndex + 1).padStart(2, "0")} <span>/</span> {String(SUN_ABOUT_PANELS.length + 1).padStart(2, "0")}</div>
-              </article>
-            );
-          })}
-        </section>
-      ) : (
-        <section
-          className="planet-content chrome"
-          id="planet-content"
-          aria-live="polite"
-          aria-atomic="true"
-          tabIndex={0}
-          aria-label={`${cfg.name} facts. Use scrolling, swiping, or arrow keys to continue to the next planet.`}
-          onKeyDown={(event) => {
-            const direction = ["ArrowDown", "PageDown", " "].includes(event.key) ? "forward"
-              : ["ArrowUp", "PageUp"].includes(event.key) ? "backward" : null;
-            if (direction) { event.preventDefault(); movePanel(direction); }
-          }}
-        >
+      <section
+        id="planet-content"
+        aria-live="polite"
+        aria-atomic="true"
+        className={aboutPanel === 0 ? "planet-content chrome is-active" : "planet-content chrome is-inactive"}
+        aria-hidden={aboutPanel !== 0}
+        tabIndex={aboutPanel === 0 ? 0 : -1}
+        aria-label={cfg.name + " facts and event information. Use scrolling, swiping, or arrow keys to continue through the event details."}
+        onKeyDown={(event) => {
+          const direction = ["ArrowDown", "PageDown", " "].includes(event.key) ? "forward"
+            : ["ArrowUp", "PageUp"].includes(event.key) ? "backward" : null;
+          if (direction) { event.preventDefault(); movePanel(direction); }
+        }}
+      >
+        <div className="planet-heading-group">
           <h1>{cfg.name.toUpperCase()}</h1>
-          <dl>{cfg.facts.map(([term, value]) => <div className="fact" key={term}><dt>{term}</dt><dd>{value}</dd></div>)}</dl>
+          <p className="planet-event-identity"><strong>{event.flyerTitle}</strong><span>{event.eventName}</span></p>
+        </div>
+        <dl>{cfg.facts.map(([term, value]) => <div className="fact" key={term}><dt>{term}</dt><dd>{value}</dd></div>)}</dl>
+      </section>
+      {event.panels.map((panel, index) => {
+        const panelIndex = index + 1;
+        const active = aboutPanel === panelIndex;
+        return (
+          <section
+            className={"about-panel event-panel chrome " + aboutMotionClass(panelIndex, aboutPanel, aboutTransition)}
+            key={planet + "-" + panel.title}
+            role="region"
+            aria-label={event.flyerTitle + ": " + panel.title}
+            aria-hidden={!active}
+            tabIndex={active ? 0 : -1}
+            onKeyDown={(keyboardEvent) => {
+              const direction = ["ArrowDown", "PageDown", " "].includes(keyboardEvent.key) ? "forward"
+                : ["ArrowUp", "PageUp"].includes(keyboardEvent.key) ? "backward" : null;
+              if (direction) { keyboardEvent.preventDefault(); movePanel(direction); }
+            }}
+          >
+            <div className="about-panel-title">
+              <p className="about-panel-section">{panel.section}</p>
+              <h2>{panel.title}</h2>
+            </div>
+            <div className="about-panel-body">
+              {panel.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+              {panel.highlights && <ul className="about-highlights">{panel.highlights.map((highlight) => <li key={highlight}>{highlight}</li>)}</ul>}
+            </div>
+            <span className="about-panel-count">{String(panelIndex + 1).padStart(2, "0")}<span>/</span>{String(panelCountFor(planet)).padStart(2, "0")}</span>
+          </section>
+        );
+      })}
+      {planet === "neptune" && (
+        <section
+          className={"neptune-end-panel chrome " + aboutMotionClass(footerPanel, aboutPanel, aboutTransition)}
+          role="region"
+          aria-label="Technotsav contact information. Scroll up to revisit Neptune."
+          aria-hidden={!atJourneyEnd}
+          tabIndex={atJourneyEnd ? 0 : -1}
+          onKeyDown={(event) => {
+            const direction = ["ArrowDown", "PageDown", " "].includes(event.key) ? "forward"
+              : ["ArrowUp", "PageUp"].includes(event.key) ? "backward" : null;
+            if (direction) { event.preventDefault(); movePanel(direction); }
+          }}
+        >
+          <div className="neptune-end-content">
+            <p className="neptune-end-eyebrow">Journey complete</p>
+            <h1>Stay in orbit.</h1>
+            <SiteFooter variant="portal" />
+          </div>
         </section>
       )}
       <div className="scroll-cue" aria-hidden="true">
-        <span>{String(aboutPanel + 1).padStart(2, "0")} / {String(panelCountFor(planet)).padStart(2, "0")} &nbsp;·&nbsp; {aboutPanel < panelCountFor(planet) - 1 ? "SCROLL TO NEXT PANEL" : PLANETS[PLANETS.findIndex(({ key }) => key === planet) + 1] ? `SCROLL TO ${PLANETS[PLANETS.findIndex(({ key }) => key === planet) + 1].name.toUpperCase()}` : "END OF JOURNEY · SCROLL UP TO REVISIT"}</span><i />
+        <span>{String(aboutPanel + 1).padStart(2, "0")} / {String(panelCountFor(planet)).padStart(2, "0")} &nbsp;·&nbsp; {atJourneyEnd ? "END OF JOURNEY · SCROLL UP TO REVISIT" : planet === "neptune" && aboutPanel === eventEndPanel - 1 ? "SCROLL FOR FESTIVAL CONTACTS" : aboutPanel > 0 ? "SCROLL TO CONTINUE EVENT DETAILS" : nextPlanet ? "SCROLL TO " + nextPlanet.name.toUpperCase() : "END OF JOURNEY"}</span><i />
       </div>
       <div className="transition-layer" aria-hidden="true"><video ref={transitionVideo} muted playsInline preload="auto" /></div>
       <div className="loading" aria-live="polite">Preparing orbit…</div>
-      <div className="custom-cursor" aria-hidden="true"><span className="cursor-orbit" /><span className="cursor-dot" /><span className="cursor-label">Enter</span></div>
     </main>
   );
 }

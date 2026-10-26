@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
+import "@/components/shared/site-chrome.css";
 
 export const metadata: Metadata = {
   title: "Technotsav 2026–27 | Space × AI",
