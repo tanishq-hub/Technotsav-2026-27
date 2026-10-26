@@ -5,7 +5,6 @@ import { PLANETS, PLANET_STATES, R2_MEDIA_ORIGIN, type PlanetDestination } from 
 import { PLANET_EVENTS } from "@/lib/events";
 import { SiteFooter } from "@/components/shared/SiteFooter";
 import { SiteHeader } from "@/components/shared/SiteHeader";
-import { CustomCursor } from "@/components/shared/CustomCursor";
 import "./planet-portal.css";
 
 type XY = { x: number; y: number };
@@ -587,6 +586,7 @@ export function PlanetPortal() {
 
   useLayoutEffect(() => {
     document.body.classList.add("preload-complete", "intro-ready");
+    root.current?.classList.add("content-revealing");
     return () => document.body.classList.remove("preload-complete", "intro-ready", "content-revealing");
   }, []);
 
@@ -643,7 +643,6 @@ export function PlanetPortal() {
           </nav>
         </>
       } />
-      <CustomCursor />
       <canvas ref={frozenCanvas} className="scene-canvas" aria-hidden="true" />
       <div className="shade" aria-hidden="true" />
 

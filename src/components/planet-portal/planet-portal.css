@@ -167,3 +167,15 @@ body:not(.intro-ready) .planet-list,body:not(.intro-ready) .about-stage,body:not
 
 .experience.is-transitioning .about-stage,.experience.is-transitioning .planet-content{opacity:0;filter:blur(8px);pointer-events:none}
 .experience.is-transitioning.is-content-visible .about-stage,.experience.is-transitioning.is-content-visible .planet-content{opacity:1;filter:none}
+
+/* Sharpen the story typography while retaining the original planet-panel layout. */
+.planet-content h1{color:#fff;text-shadow:0 8px 42px rgba(0,0,0,.7),0 0 28px rgba(122,183,255,.16)}
+.planet-content dl{padding:13px 18px;border:1px solid rgba(225,237,255,.2);border-radius:14px;background:linear-gradient(145deg,rgba(7,14,26,.48),rgba(7,10,18,.25));box-shadow:inset 0 1px rgba(255,255,255,.08),0 14px 42px rgba(0,0,0,.2);backdrop-filter:blur(12px)}
+.planet-content .fact{border-color:rgba(235,241,251,.18)}
+.planet-content .fact dt{color:#ffd58a;font-weight:700;letter-spacing:.025em}
+.planet-content .fact dd{color:rgba(255,255,255,.95);text-shadow:0 1px 8px rgba(0,0,0,.4)}
+.planet-event-identity strong{color:#ffe0a0;text-shadow:0 0 20px rgba(255,170,93,.35)}
+.planet-event-identity span{padding:4px 8px;border:1px solid rgba(235,241,251,.16);border-radius:999px;background:rgba(3,7,14,.42);backdrop-filter:blur(8px)}
+.event-panel .about-panel-title h2{background:linear-gradient(110deg,#fff 15%,#c9e6ff 63%,#ffd695);background-clip:text;-webkit-background-clip:text;color:transparent;text-shadow:0 4px 25px rgba(0,0,0,.35)}
+.event-panel .about-panel-body{border-color:rgba(185,213,246,.28);background:linear-gradient(145deg,rgba(8,16,29,.7),rgba(5,9,17,.58));box-shadow:inset 0 1px rgba(255,255,255,.09),0 18px 50px rgba(0,0,0,.2);backdrop-filter:blur(18px)}
+@media(max-width:640px){.planet-content dl{padding:9px 12px;border-radius:11px}.planet-content .fact{border-color:rgba(235,241,251,.16)}}

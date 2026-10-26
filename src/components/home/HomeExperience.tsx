@@ -8,13 +8,13 @@ import { ASSETS, R2_MEDIA_ORIGIN, SUN_ABOUT_PANELS } from "@/lib/planets";
 import { FESTIVAL_DETAILS, FESTIVAL_EVENTS } from "@/lib/festival";
 import { SiteFooter } from "@/components/shared/SiteFooter";
 import { SiteHeader } from "@/components/shared/SiteHeader";
-import { CustomCursor } from "@/components/shared/CustomCursor";
 import "./home-experience.css";
 
 const TechnotsavGuide = dynamic(
   () => import("@/components/home/TechnotsavGuide").then((module) => module.TechnotsavGuide),
   { loading: () => <div className="guide-loading" role="status">Opening the preset guide…</div> },
 );
+const HOME_VIDEO_POSITION_KEY = "technotsav-home-solar-position";
 
 function isFullyBuffered(video: HTMLVideoElement) {
   for (let index = 0; index < video.buffered.length; index += 1) {
@@ -106,7 +106,12 @@ export function HomeExperience() {
 
     let revealTimer = 0;
     let revealScheduled = false;
+    let restoredPosition = false;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const savePosition = () => {
+      if (!Number.isFinite(video.currentTime) || video.currentTime <= 0) return;
+      try { window.sessionStorage.setItem(HOME_VIDEO_POSITION_KEY, String(video.currentTime)); } catch { /* Storage can be unavailable in private contexts. */ }
+    };
     const revealAfterTwoSeconds = () => {
       if (revealScheduled) return;
       revealScheduled = true;
@@ -114,29 +119,76 @@ export function HomeExperience() {
     };
     const revealOnFailure = () => setHomeReady(true);
     const onLoadedData = () => { if (reducedMotion) revealAfterTwoSeconds(); };
+    const startPlayback = () => {
+      if (!restoredPosition) {
+        restoredPosition = true;
+        try {
+          const saved = Number(window.sessionStorage.getItem(HOME_VIDEO_POSITION_KEY));
+          if (Number.isFinite(saved) && saved > 0 && saved < video.duration - 0.5) video.currentTime = saved;
+        } catch { /* Storage can be unavailable in private contexts. */ }
+      }
+      if (reducedMotion) {
+        video.pause();
+        revealAfterTwoSeconds();
+      } else if (document.visibilityState === "visible") {
+        void video.play().catch(revealOnFailure);
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        savePosition();
+        video.pause();
+      } else if (!reducedMotion) {
+        void video.play().catch(revealOnFailure);
+      }
+    };
     // Do not leave the page hidden if a video host or autoplay policy fails.
     const failSafe = window.setTimeout(revealOnFailure, 15_000);
 
     video.addEventListener("playing", revealAfterTwoSeconds, { once: true });
     video.addEventListener("loadeddata", onLoadedData, { once: true });
+    video.addEventListener("loadedmetadata", startPlayback, { once: true });
     video.addEventListener("error", revealOnFailure, { once: true });
+    video.addEventListener("timeupdate", savePosition);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    video.loop = true;
     video.preload = "auto";
     video.load();
 
-    if (reducedMotion) {
-      video.pause();
-    } else {
-      void video.play().catch(revealOnFailure);
-    }
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) startPlayback();
 
     return () => {
+      savePosition();
+      video.pause();
       window.clearTimeout(revealTimer);
       window.clearTimeout(failSafe);
       video.removeEventListener("playing", revealAfterTwoSeconds);
       video.removeEventListener("loadeddata", onLoadedData);
+      video.removeEventListener("loadedmetadata", startPlayback);
       video.removeEventListener("error", revealOnFailure);
+      video.removeEventListener("timeupdate", savePosition);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [introVisible]);
+
+  useEffect(() => {
+    const targets = Array.from(document.querySelectorAll<HTMLElement>(".home-site [data-reveal]"));
+    if (!targets.length) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion || !("IntersectionObserver" in window)) {
+      targets.forEach((target) => target.classList.add("is-revealed"));
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("is-revealed");
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0.12, rootMargin: "0px 0px -7% 0px" });
+    targets.forEach((target) => observer.observe(target));
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -199,21 +251,21 @@ export function HomeExperience() {
   return (
     <>
       <SiteHeader activeTab="home" homeDocked={!introVisible} />
-      <CustomCursor />
+      <video
+        ref={solarSystemVideo}
+        className="home-background-video"
+        src={ASSETS.solarSystemVideo}
+        muted
+        loop
+        playsInline
+        preload="none"
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+      <div className="home-background-shade" aria-hidden="true" />
       <main className={homeReady ? "home-site is-ready" : "home-site"}>
 
       <section className="home-hero" aria-labelledby="home-title">
-        <video
-          ref={solarSystemVideo}
-          className="home-hero-video"
-          src={ASSETS.solarSystemVideo}
-          muted
-          loop
-          playsInline
-          preload="none"
-          aria-hidden="true"
-          tabIndex={-1}
-        />
         <div className="home-hero-shade" />
         <div className="home-hero-copy">
           <p className="home-eyebrow">11th edition <span>·</span> 2026–27</p>
@@ -226,16 +278,16 @@ export function HomeExperience() {
       </section>
 
       <section className="home-about" id="about" aria-labelledby="about-title">
-        <div className="section-heading"><p className="home-eyebrow">The story behind the journey</p><h2 id="about-title">A place to explore<br /><em>what comes next.</em></h2></div>
+        <div className="section-heading" data-reveal><p className="home-eyebrow">The story behind the journey</p><h2 id="about-title">A place to explore<br /><em>what comes next.</em></h2></div>
         <div className="about-cards">
-          <article className="about-card about-college"><p className="home-eyebrow">About NMFC</p><h3>Nirmala Memorial Foundation College</h3>
+          <article className="about-card about-college" data-reveal><p className="home-eyebrow">About NMFC</p><h3>Nirmala Memorial Foundation College</h3>
             {SUN_ABOUT_PANELS.slice(0, 2).flatMap((panel) => panel.paragraphs).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
           </article>
-          <article className="about-card about-festival"><p className="home-eyebrow">About Technotsav</p><h3>A technical festival since 2013</h3>
+          <article className="about-card about-festival" data-reveal><p className="home-eyebrow">About Technotsav</p><h3>A technical festival since 2013</h3>
             {SUN_ABOUT_PANELS.slice(2).flatMap((panel) => panel.paragraphs).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
           </article>
         </div>
-        <section className="home-event-lineup" aria-labelledby="event-lineup-title">
+        <section className="home-event-lineup" aria-labelledby="event-lineup-title" data-reveal>
           <div className="home-event-heading">
             <div><p className="home-eyebrow">2026–27 event lineup</p><h3 id="event-lineup-title">Eight ways to join the orbit.</h3><p className="home-event-departments">Presented by {FESTIVAL_DETAILS.departments}</p></div>
             <p className="home-event-date">{FESTIVAL_DETAILS.date}</p>
@@ -250,7 +302,7 @@ export function HomeExperience() {
             ))}
           </div>
         </section>
-        <div className="home-about-action"><p>Explore the planets and their event panels.</p><Link className="home-cta" href="/events">Enter the event experience <span aria-hidden="true">↗</span></Link></div>
+        <div className="home-about-action" data-reveal><p>Explore the planets and their event panels.</p><Link className="home-cta" href="/events">Enter the event experience <span aria-hidden="true">↗</span></Link></div>
       </section>
 
       <SiteFooter />

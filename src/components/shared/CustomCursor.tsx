@@ -9,7 +9,7 @@ export function CustomCursor() {
     const node = cursor.current;
     const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (!node || !finePointer.matches || reducedMotion.matches) return;
+    if (!node || !finePointer.matches) return;
 
     let x = 0;
     let y = 0;
@@ -29,6 +29,10 @@ export function CustomCursor() {
       targetY = event.clientY;
       node.classList.add("is-visible");
       node.classList.toggle("is-enter", Boolean((event.target as Element | null)?.closest?.("a, button")));
+      if (reducedMotion.matches) {
+        node.style.transform = "translate3d(" + targetX + "px, " + targetY + "px, 0)";
+        return;
+      }
       if (!frame) frame = requestAnimationFrame(animate);
     };
     const leave = () => {

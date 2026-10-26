@@ -6,7 +6,6 @@ import { ASSETS, R2_MEDIA_ORIGIN } from "@/lib/planets";
 import { FESTIVAL_DETAILS } from "@/lib/festival";
 import { SiteFooter } from "@/components/shared/SiteFooter";
 import { SiteHeader } from "@/components/shared/SiteHeader";
-import { CustomCursor } from "@/components/shared/CustomCursor";
 import "./registration.css";
 
 export default function RegistrationPage() {
@@ -29,7 +28,6 @@ export default function RegistrationPage() {
   return (
     <>
       <SiteHeader activeTab="registration" />
-      <CustomCursor />
       <main className="registration-page">
       <video
         ref={sunVideo}
