@@ -1,6 +1,4 @@
 "use client";
-/* eslint-disable @next/next/no-img-element */
-
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -310,11 +308,6 @@ export function HomeExperience() {
       {introVisible && <div className={introLeaving ? "home-intro is-leaving" : "home-intro"} role="status" aria-live="polite" aria-label={`Loading Technotsav ${progress}%`}>
         <video ref={spaceVideo} className="home-intro-video" src={ASSETS.spaceVideo} muted playsInline preload="auto" crossOrigin={ASSETS.spaceVideo.startsWith(`${R2_MEDIA_ORIGIN}/`) ? "anonymous" : undefined} />
         <div className="home-intro-vignette" />
-        <div className="home-intro-brand">
-          <img className="home-intro-edition" src="/technotsav-11th-edition.png" alt="" />
-          <img className="home-intro-wordmark" src="/technotsav-wordmark-horizontal.png" alt="Technotsav" />
-          <img className="home-intro-theme" src="/technotsav-space-ai.png" alt="Space × AI" />
-        </div>
         <p className="home-intro-progress">{progress}<b>%</b></p>
       </div>}
       </main>

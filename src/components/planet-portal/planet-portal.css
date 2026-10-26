@@ -228,6 +228,16 @@ body:not(.intro-ready) .planet-list,body:not(.intro-ready) .about-stage,body:not
   .experience[data-planet] .planet-content dl{justify-self:start;max-width:560px;font-size:13px}
   .experience[data-planet] .planet-content .fact{grid-template-columns:92px minmax(0,1fr);gap:10px;padding:6px 0}
 }
+
+/* Keep the active event story visible after its two-second reveal, even while
+   the destination video continues its longer transition playback. */
+.experience.is-transitioning.is-content-visible :is(.event-panel,.neptune-end-panel):is(
+  .is-settled,
+  .is-entering-from-bottom,
+  .is-entering-from-top,
+  .is-leaving-up,
+  .is-leaving-down
+){opacity:1;filter:none;pointer-events:auto}
 @media(max-width:640px){
   .experience[data-planet] .planet-content{left:16px;right:16px;bottom:46px;grid-template-columns:minmax(0,1fr);gap:12px}
   .experience[data-planet] .planet-heading-group{gap:9px}
