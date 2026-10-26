@@ -3,10 +3,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { ASSETS, R2_MEDIA_ORIGIN, SUN_ABOUT_PANELS } from "@/lib/planets";
 import { EVENT_TIME_ZONE, TECHNOTSAV_EVENT_START } from "@/lib/event-time";
 import { SolarSystemArtwork } from "@/components/home/SolarSystemArtwork";
 import "./home-experience.css";
+
+const TechnotsavGuide = dynamic(
+  () => import("@/components/home/TechnotsavGuide").then((module) => module.TechnotsavGuide),
+  { loading: () => <div className="guide-loading" role="status">Opening the preset guide…</div> },
+);
 
 function remaining(now: number) {
   const seconds = Math.max(0, Math.floor((TECHNOTSAV_EVENT_START - now) / 1000));
@@ -82,6 +88,13 @@ export function HomeExperience() {
   const [introVisible, setIntroVisible] = useState(true);
   const [introLeaving, setIntroLeaving] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const guideButton = useRef<HTMLButtonElement>(null);
+
+  const closeGuide = () => {
+    setGuideOpen(false);
+    window.requestAnimationFrame(() => guideButton.current?.focus());
+  };
 
   useEffect(() => {
     const update = () => setCountdown(remaining(Date.now()));
@@ -191,6 +204,21 @@ export function HomeExperience() {
       </section>
 
       <footer className="home-footer"><span>Technotsav 2026–27 · Space × AI</span><span>Decoding Infinity. Defining Tomorrow.</span></footer>
+
+      {!introVisible && <>
+        <button
+          className="guide-launcher"
+          type="button"
+          ref={guideButton}
+          aria-expanded={guideOpen}
+          aria-controls="technotsav-guide-panel"
+          onClick={() => setGuideOpen((open) => !open)}
+        >
+          <span className="guide-launcher-icon" aria-hidden="true">✦</span>
+          <span>Ask the Guide</span>
+        </button>
+        {guideOpen && <TechnotsavGuide onClose={closeGuide} />}
+      </>}
 
       {introVisible && <div className={introLeaving ? "home-intro is-leaving" : "home-intro"} role="status" aria-live="polite" aria-label={`Loading Technotsav ${progress}%`}>
         <video ref={spaceVideo} className="home-intro-video" src={ASSETS.spaceVideo} muted playsInline preload="auto" crossOrigin={ASSETS.spaceVideo.startsWith(`${R2_MEDIA_ORIGIN}/`) ? "anonymous" : undefined} />

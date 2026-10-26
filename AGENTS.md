@@ -17,6 +17,7 @@
 - Keep the Home and Registration solar-system artwork decorative and CSS-based in src/components/home; it must not add a canvas/3D dependency or intercept input.
 - Use the Space video only as the loading-screen background. After the loading screen exits and Home is visible, preload the Sun video in the background. The Events route starts directly on the Sun video and does not play the Home intro.
 - Keep confirmed college and Technotsav copy in src/lib/planets.ts until it is intentionally moved into a shared content module.
+- The Home-only Technotsav Guide is a lazy-loaded, local preset-answer interface, not live AI. Use only confirmed copy from `src/data/guide-responses.ts`; keep conversation state in component memory and do not add network calls or persistent chat storage.
 - Shared media URLs and planet data live in src/lib/planets.ts.
 - Keep browser interaction in the focused client component src/components/planet-portal/PlanetPortal.tsx.
 - Keep the canvas portal renderer lightweight and do not add a 3D engine or external JavaScript/CSS libraries.

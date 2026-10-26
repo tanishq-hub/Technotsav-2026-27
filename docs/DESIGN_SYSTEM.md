@@ -39,6 +39,7 @@ The Home illustration uses scoped color tokens in `src/components/home/home-expe
 - Planet media paths and facts are centralized in src/lib/planets.ts. Active media is loaded on selection; while idle, at most one next planet is prefetched in solar order. Explicit planet selection cancels that work and takes priority.
 - The loading screen uses the Space video as its visible background and waits for that asset. Once Home is visible, preload the Sun video in the background for the Events route. The Events route has no Space intro; it starts directly with the Sun video.
 - Home and Registration share the pure CSS orbit illustration, which has no pointer interaction and simplifies motion when `prefers-reduced-motion` is enabled.
+- Home includes an on-demand Technotsav Guide panel. It is labeled as preset answers rather than live AI, uses confirmed content only, and keeps messages in memory until the panel closes or Home unmounts. Its chunk is loaded only when opened.
 
 ## Motion and accessibility
 
