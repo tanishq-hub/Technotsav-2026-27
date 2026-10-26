@@ -1,5 +1,5 @@
-import { PlanetPortal } from "@/components/planet-portal/PlanetPortal";
+import { HomeExperience } from "@/components/home/HomeExperience";
 
 export default function Home() {
-  return <PlanetPortal />;
+  return <HomeExperience />;
 }

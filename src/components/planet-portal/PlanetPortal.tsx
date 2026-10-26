@@ -1,21 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ASSETS, PLANETS, PLANET_STATES, R2_MEDIA_ORIGIN, SUN_ABOUT_PANELS, type PlanetKey } from "@/lib/planets";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { PLANETS, PLANET_STATES, R2_MEDIA_ORIGIN, SUN_ABOUT_PANELS, type PlanetKey } from "@/lib/planets";
 import { EVENT_TIME_ZONE, TECHNOTSAV_EVENT_START } from "@/lib/event-time";
 import "./planet-portal.css";
 
 type XY = { x: number; y: number };
 type AboutTransition = { from: number; to: number; direction: "forward" | "backward" };
 type CountdownParts = { days: number; hours: number; minutes: number; seconds: number };
-type VideoPreloadQueue = {
-  items: string[];
-  completed: Set<string>;
-  index: number;
-  activeController: AbortController | null;
-  paused: boolean;
-  running: boolean;
-};
 const ease = (t: number) => t < .5 ? 4 * t ** 3 : 1 - Math.pow(-2 * t + 2, 3) / 2;
 const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -113,124 +106,6 @@ async function downloadVideoIntoBrowserCache(
   onProgress?.(1);
 }
 
-function mediaBufferedToEnd(video: HTMLVideoElement) {
-  if (!Number.isFinite(video.duration) || video.duration <= 0) return false;
-  for (let index = 0; index < video.buffered.length; index += 1) {
-    if (video.buffered.start(index) < 0.1 && video.buffered.end(index) >= video.duration - 0.1) return true;
-  }
-  return false;
-}
-
-function waitForFullMediaBuffer(video: HTMLVideoElement, timeout: number, signal: AbortSignal, onProgress?: (progress: number) => void) {
-  return new Promise<boolean>((resolve) => {
-    if (mediaBufferedToEnd(video)) { onProgress?.(1); return resolve(true); }
-    let done = false;
-    const cleanup = () => {
-      window.clearTimeout(timer);
-      video.removeEventListener("progress", check);
-      video.removeEventListener("loadedmetadata", check);
-      video.removeEventListener("canplaythrough", check);
-      video.removeEventListener("error", failed);
-      signal.removeEventListener("abort", aborted);
-    };
-    const finish = (result: boolean) => {
-      if (done) return;
-      done = true;
-      cleanup();
-      resolve(result);
-    };
-    const check = () => {
-      if (Number.isFinite(video.duration) && video.duration > 0) {
-        let bufferedEnd = 0;
-        for (let index = 0; index < video.buffered.length; index += 1) bufferedEnd = Math.max(bufferedEnd, video.buffered.end(index));
-        onProgress?.(Math.min(1, bufferedEnd / video.duration));
-      }
-      if (mediaBufferedToEnd(video)) finish(true);
-    };
-    const failed = () => finish(false);
-    const aborted = () => finish(false);
-    const timer = window.setTimeout(() => finish(false), timeout);
-    video.addEventListener("progress", check);
-    video.addEventListener("loadedmetadata", check);
-    video.addEventListener("canplaythrough", check);
-    video.addEventListener("error", failed);
-    signal.addEventListener("abort", aborted, { once: true });
-    check();
-  });
-}
-
-function preloadCrossOriginVideo(url: string, signal: AbortSignal) {
-  return new Promise<void>((resolve) => {
-    if (signal.aborted) return resolve();
-    const video = document.createElement("video");
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = "auto";
-    let done = false;
-    const cleanup = () => {
-      video.removeEventListener("progress", check);
-      video.removeEventListener("loadedmetadata", check);
-      video.removeEventListener("canplaythrough", check);
-      video.removeEventListener("error", finish);
-      signal.removeEventListener("abort", finish);
-      video.removeAttribute("src");
-      video.load();
-    };
-    const finish = () => {
-      if (done) return;
-      done = true;
-      cleanup();
-      resolve();
-    };
-    const check = () => { if (mediaBufferedToEnd(video)) finish(); };
-    video.addEventListener("progress", check);
-    video.addEventListener("loadedmetadata", check);
-    video.addEventListener("canplaythrough", check);
-    video.addEventListener("error", finish);
-    signal.addEventListener("abort", finish, { once: true });
-    video.src = url;
-    video.load();
-    check();
-  });
-}
-
-async function runVideoPreloadQueue(queue: VideoPreloadQueue) {
-  if (queue.running || queue.paused) return;
-  queue.running = true;
-  try {
-    while (queue.index < queue.items.length && !queue.paused) {
-      const url = queue.items[queue.index];
-      if (queue.completed.has(url)) {
-        queue.index += 1;
-        continue;
-      }
-
-      const controller = new AbortController();
-      queue.activeController = controller;
-      try {
-        await downloadVideoIntoBrowserCache(url, controller.signal);
-      } catch {
-        if (!controller.signal.aborted) {
-          // Some public cross-origin media does not allow fetch CORS. Let the
-          // browser's video loader warm its normal media cache instead.
-          await preloadCrossOriginVideo(url, controller.signal);
-        }
-      }
-
-      if (controller.signal.aborted || queue.paused) break;
-      queue.completed.add(url);
-      queue.index += 1;
-      queue.activeController = null;
-    }
-  } finally {
-    queue.activeController = null;
-    queue.running = false;
-    if (!queue.paused && queue.index < queue.items.length) {
-      queueMicrotask(() => { void runVideoPreloadQueue(queue); });
-    }
-  }
-}
-
 export function PlanetPortal() {
   const root = useRef<HTMLElement>(null);
   const transitionOrigin = useRef<HTMLDivElement>(null);
@@ -239,13 +114,11 @@ export function PlanetPortal() {
   const frozenCanvas = useRef<HTMLCanvasElement>(null);
   const backgroundVideo = useRef<HTMLVideoElement>(null);
   const transitionVideo = useRef<HTMLVideoElement>(null);
-  const preloaderVideo = useRef<HTMLVideoElement>(null);
   const [planet, setPlanet] = useState<PlanetKey>("sun");
   const [backgroundPlanet, setBackgroundPlanet] = useState<PlanetKey>("sun");
   const [selectedPlanet, setSelectedPlanet] = useState<PlanetKey>("sun");
-  const [counter, setCounter] = useState(0);
   const [countdown, setCountdown] = useState<CountdownParts | null>(null);
-  const [introComplete, setIntroComplete] = useState(false);
+  const introComplete = true;
   const [switching, setSwitching] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [aboutPanel, setAboutPanel] = useState(0);
@@ -261,8 +134,7 @@ export function PlanetPortal() {
   const panelSequenceReady = useRef(false);
   const travelRef = useRef<(destination: PlanetKey, panelIndex?: number) => void>(() => {});
   const transitionController = useRef<AbortController | null>(null);
-  const backgroundPreloadQueue = useRef<VideoPreloadQueue | null>(null);
-  const resumeBackgroundPreload = useRef<() => void>(() => {});
+  const idlePreloadController = useRef<AbortController | null>(null);
   const frozen = useRef(false);
   const busy = useRef(false);
 
@@ -409,12 +281,6 @@ export function PlanetPortal() {
 
   const travel = useCallback(async (destination: PlanetKey, initialPanel = 0) => {
     if (!busy.current && state.current === destination) return;
-    const preloadQueue = backgroundPreloadQueue.current;
-    if (preloadQueue) {
-      preloadQueue.paused = true;
-      preloadQueue.activeController?.abort();
-    }
-
     if (busy.current) {
       // A direct planet choice takes priority over an in-flight transition.
       transitionController.current?.abort();
@@ -430,6 +296,8 @@ export function PlanetPortal() {
       requestCanvasFrame.current();
     }
 
+    idlePreloadController.current?.abort();
+    idlePreloadController.current = null;
     busy.current = true;
     panelSequenceReady.current = false;
     setSelectedPlanet(destination);
@@ -460,7 +328,6 @@ export function PlanetPortal() {
       requestCanvasFrame.current();
       busy.current = false;
       if (transitionController.current === controller) transitionController.current = null;
-      resumeBackgroundPreload.current();
     };
     const showDestinationWithoutTransition = async () => {
       if (signal.aborted) return;
@@ -501,6 +368,14 @@ export function PlanetPortal() {
       shell.classList.add("is-transitioning");
       video.currentTime = 0;
       video.playbackRate = 1;
+      video.pause();
+      activeTransition.current = true;
+      expansion.current = 0;
+      requestCanvasFrame.current();
+      // Reveal the destination video as a still first frame. Playback begins only
+      // after the portal is mostly open, so the motion feels intentional.
+      await animateValue((v) => { if (!signal.aborted) expansion.current = v * 0.8; }, 850);
+      if (signal.aborted) return;
       try {
         await video.play();
       } catch {
@@ -510,12 +385,11 @@ export function PlanetPortal() {
       }
       if (signal.aborted) return;
 
-      activeTransition.current = true;
       requestCanvasFrame.current();
       const ended = playbackEnded(video, Math.min(15000, (video.duration || 8) * 1000 + 1200), signal);
       const revealTimer = window.setTimeout(revealDestination, 2000);
       await Promise.all([
-        animateValue((v) => { if (!signal.aborted) expansion.current = v; }, 1100),
+        animateValue((v) => { if (!signal.aborted) expansion.current = 0.8 + v * 0.2; }, 320),
         ended,
       ]);
       if (signal.aborted) return;
@@ -565,8 +439,63 @@ export function PlanetPortal() {
   useEffect(() => { travelRef.current = travel; }, [travel]);
   useEffect(() => () => {
     transitionController.current?.abort();
+    idlePreloadController.current?.abort();
     transitionVideo.current?.pause();
   }, []);
+
+  useEffect(() => {
+    if (!introComplete || busy.current) return;
+    const currentIndex = PLANETS.findIndex(({ key }) => key === planet);
+    const nextPlanet = PLANETS[currentIndex + 1];
+    if (!nextPlanet) return;
+    const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+    if (connection?.saveData || connection?.effectiveType === "2g" || connection?.effectiveType === "slow-2g") return;
+
+    const controller = new AbortController();
+    idlePreloadController.current?.abort();
+    idlePreloadController.current = controller;
+    let idleId = 0;
+    let timeoutId = 0;
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    const preload = () => {
+      if (controller.signal.aborted) return;
+      const url = PLANET_STATES[nextPlanet.key].background;
+      if (url.startsWith(`${R2_MEDIA_ORIGIN}/`)) {
+        void downloadVideoIntoBrowserCache(url, controller.signal).catch(() => undefined);
+        return;
+      }
+      // For the three externally hosted videos, let the media element use the
+      // browser's normal HTTP cache without requiring cross-origin fetch access.
+      const queuedVideo = document.createElement("video");
+      queuedVideo.muted = true;
+      queuedVideo.playsInline = true;
+      queuedVideo.preload = "auto";
+      queuedVideo.src = url;
+      queuedVideo.load();
+      const cleanup = () => {
+        queuedVideo.pause();
+        queuedVideo.removeAttribute("src");
+        queuedVideo.load();
+        controller.signal.removeEventListener("abort", cleanup);
+      };
+      controller.signal.addEventListener("abort", cleanup, { once: true });
+      queuedVideo.addEventListener("canplaythrough", cleanup, { once: true });
+      window.setTimeout(cleanup, 25_000);
+    };
+    if (idleWindow.requestIdleCallback) {
+      idleId = idleWindow.requestIdleCallback(preload, { timeout: 2500 });
+    } else {
+      timeoutId = window.setTimeout(preload, 900);
+    }
+    return () => {
+      controller.abort();
+      if (idleId && idleWindow.cancelIdleCallback) idleWindow.cancelIdleCallback(idleId);
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+  }, [introComplete, planet]);
 
   useEffect(() => {
     const el = canvas.current;
@@ -674,121 +603,12 @@ export function PlanetPortal() {
     };
   }, []);
 
-  useEffect(() => {
-    document.body.classList.remove("preload-complete", "intro-ready", "content-revealing");
-    const video = preloaderVideo.current;
-    let finished = false, logoRevealTimer = 0, finishTimer = 0, progressTimer = 0;
-    let counterNode: HTMLElement | null = null;
-    if (!video) return;
-    const introStartedAt = performance.now();
-    const controller = new AbortController();
-    let sunProgress = 0, spaceProgress = 0, lastProgress = 0;
-    const updateProgress = () => {
-      const elapsedProgress = video.duration > 0
-        ? Math.min(1, video.currentTime / video.duration)
-        : Math.min(1, (performance.now() - introStartedAt) / 5000);
-      const progress = Math.min(99, Math.floor((sunProgress * 45 + spaceProgress * 45 + elapsedProgress * 9)));
-      if (progress > lastProgress) {
-        lastProgress = progress;
-        setCounter(progress);
-      }
-    };
-    progressTimer = window.setInterval(updateProgress, 100);
-    const start = () => {
-      document.body.classList.add("intro-ready");
-      window.setTimeout(revealContent, reduceMotion() ? 0 : 850);
-    };
-    const finish = () => {
-      if (finished) return;
-      const remainingIntroTime = 5000 - (performance.now() - introStartedAt);
-      if (remainingIntroTime > 0) {
-        if (!finishTimer) finishTimer = window.setTimeout(() => { finishTimer = 0; finish(); }, remainingIntroTime);
-        return;
-      }
-      finished = true; clearInterval(progressTimer); controller.abort(); setCounter(100);
-      counterNode = document.getElementById("preloader-count");
-      counterNode?.classList.add("is-leaving");
-      document.getElementById("floating-lockup")?.classList.add("is-docked");
-      document.getElementById("preloader")?.classList.add("is-background");
-      document.body.classList.add("preload-complete");
-      setIntroComplete(true);
-      start();
-      window.setTimeout(() => counterNode?.remove(), 750);
-      logoRevealTimer = window.setTimeout(() => {
-        document.getElementById("floating-lockup")?.classList.add("is-settled");
-        document.getElementById("floating-theme")?.classList.add("is-revealing");
-      }, reduceMotion() ? 0 : 2000);
-    };
-    const begin = () => {
-      if (reduceMotion()) return;
-      video.playbackRate = 1;
-      void video.play().catch(() => undefined);
-    };
-    video.addEventListener("loadedmetadata", begin, { once: true });
-    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) begin();
-
-    const sunDownload = downloadVideoIntoBrowserCache(ASSETS.sunVideo, controller.signal, (progress) => {
-      sunProgress = progress;
-      updateProgress();
-    }).catch(() => false);
-    const spaceDownload = (async () => {
-      if (await waitForFullMediaBuffer(video, 12_000, controller.signal, (progress) => {
-        spaceProgress = progress;
-        updateProgress();
-      })) return true;
-      try {
-        await downloadVideoIntoBrowserCache(ASSETS.spaceVideo, controller.signal, (progress) => {
-          spaceProgress = progress;
-          updateProgress();
-        });
-        return true;
-      } catch {
-        return false;
-      }
-    })();
-    void Promise.all([sunDownload, spaceDownload]).then(finish);
-
-    // A broken or blocked media request must not leave the whole experience inaccessible.
-    const failSafe = window.setTimeout(finish, 45_000);
-    return () => {
-      clearTimeout(failSafe); clearTimeout(logoRevealTimer); clearTimeout(finishTimer); clearInterval(progressTimer); controller.abort();
-      video.removeEventListener("loadedmetadata", begin); video.removeEventListener("ended", finish);
-      video.removeEventListener("error", finish);
-      document.body.classList.remove("preload-complete", "intro-ready", "content-revealing");
-    };
+  useLayoutEffect(() => {
+    document.body.classList.add("preload-complete", "intro-ready");
+    document.getElementById("floating-lockup")?.classList.add("is-docked", "is-settled");
+    document.getElementById("floating-theme")?.classList.add("is-revealing");
+    return () => document.body.classList.remove("preload-complete", "intro-ready", "content-revealing");
   }, []);
-
-  useEffect(() => {
-    if (!introComplete) return;
-    const seen = new Set<string>([ASSETS.spaceVideo, ASSETS.sunVideo]);
-    const queue = PLANETS.flatMap(({ key }) => {
-      const url = PLANET_STATES[key].background;
-      if (seen.has(url)) return [];
-      seen.add(url);
-      return [url];
-    });
-
-    const manager: VideoPreloadQueue = {
-      items: queue,
-      completed: new Set([ASSETS.spaceVideo, ASSETS.sunVideo]),
-      index: 0,
-      activeController: null,
-      paused: false,
-      running: false,
-    };
-    backgroundPreloadQueue.current = manager;
-    resumeBackgroundPreload.current = () => {
-      manager.paused = false;
-      void runVideoPreloadQueue(manager);
-    };
-    void runVideoPreloadQueue(manager);
-    return () => {
-      manager.paused = true;
-      manager.activeController?.abort();
-      if (backgroundPreloadQueue.current === manager) backgroundPreloadQueue.current = null;
-      resumeBackgroundPreload.current = () => {};
-    };
-  }, [introComplete]);
 
   useEffect(() => {
     const background = backgroundVideo.current;
@@ -835,13 +655,9 @@ export function PlanetPortal() {
           crossOrigin={PLANET_STATES[backgroundPlanet].background.startsWith(`${R2_MEDIA_ORIGIN}/`) ? "anonymous" : undefined}
           muted
           playsInline
-          preload={introComplete ? "metadata" : "none"}
+          preload="auto"
           loop
         />
-      </div>
-      <div className="preloader" id="preloader" aria-label="Loading into space">
-        <video ref={preloaderVideo} id="preloader-video" src={ASSETS.spaceVideo} crossOrigin="anonymous" muted playsInline preload="auto" />
-        <div className="preloader-shade" />
       </div>
       <div className="floating-lockup" id="floating-lockup" role="group" aria-label="Technotsav 11th edition logo">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -851,7 +667,6 @@ export function PlanetPortal() {
       </div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img className="floating-theme" id="floating-theme" src="/technotsav-space-ai.png" alt="Space × AI" />
-      <div className="preloader-count" id="preloader-count" aria-live="polite"><span>{counter}</span><span className="percent">%</span></div>
       <canvas ref={frozenCanvas} className="scene-canvas" aria-hidden="true" />
       <div className="shade" aria-hidden="true" />
 
@@ -874,7 +689,8 @@ export function PlanetPortal() {
       </div>
 
       <header className="header chrome">
-        <button className="menu" type="button" aria-controls="mobile-destinations" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? "Close" : "Destinations"}</button>
+        <nav className="portal-nav" aria-label="Main navigation"><Link href="/">Home</Link><Link href="/events" aria-current="page">Events</Link><Link href="/registration">Registration</Link></nav>
+        <button className="menu" type="button" aria-controls="mobile-destinations" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>{menuOpen ? "Close" : "Planets"}</button>
         <nav className="mobile-destinations" id="mobile-destinations" aria-label="Planet destinations" hidden={!menuOpen}>
           <p className="destination-heading">Choose a destination</p>
           <div className="destination-options">

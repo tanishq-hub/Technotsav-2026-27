@@ -98,9 +98,14 @@ body:not(.intro-ready) .header,body:not(.intro-ready) .planet-list,body:not(.int
 /* Mobile destination picker: replace the cramped horizontal planet strip with a compact menu. */
 .mobile-destinations{display:none}
 .mobile-destinations[hidden]{display:none}
-@media(min-width:901px){.header,.menu{display:none}}
+@media(min-width:901px){.menu{display:none}}
+.portal-nav{display:flex;align-items:center;gap:clamp(16px,2.4vw,34px);padding:12px 18px;border:1px solid rgba(232,244,255,.22);border-radius:999px;background:rgba(5,12,25,.34);backdrop-filter:blur(14px)}
+.portal-nav a{color:rgba(245,248,255,.76);font-size:11px;letter-spacing:.08em;text-decoration:none;transition:color .2s ease}
+.portal-nav a:hover,.portal-nav a[aria-current=page]{color:#fff}
 @media(max-width:900px){
   .header{z-index:10;display:flex}
+  .portal-nav{gap:clamp(7px,2vw,16px);padding:10px 12px}
+  .portal-nav a{font-size:10px;letter-spacing:.03em}
   .nav{display:none}
   .menu{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-left:0;padding:0 17px;border:1px solid rgba(232,244,255,.35);background:rgba(5,12,25,.72);color:#f5f8ff;font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;backdrop-filter:blur(14px)}
   .menu::after{content:"";width:6px;height:6px;margin-left:10px;border-top:1px solid currentColor;border-right:1px solid currentColor;transform:rotate(135deg) translateY(1px);transition:transform .2s ease}
@@ -118,6 +123,8 @@ body:not(.intro-ready) .header,body:not(.intro-ready) .planet-list,body:not(.int
   .planet-list{display:none}
 }
 @media(max-width:640px){
+  .portal-nav{gap:8px;padding:9px 10px}
+  .portal-nav a{font-size:9px}
   .planet-content{bottom:58px}
   .planet-content h1{transform:translateX(0)}
   .content-revealing .planet-content h1{animation-name:planet-title-rise-mobile}

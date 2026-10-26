@@ -1,10 +1,11 @@
-# Planet Jumping Project Guide
+# Technotsav Website Project Guide
 
 
 ## Project scope
 
-- This application is a single-page immersive space portal experience.
-- The route is implemented in the Next.js App Router and is the single source of truth for the website.
+- This application is the Technotsav 2026–27 festival website.
+- `/` is the Home experience, `/events` is the immersive planet portal, and `/registration` is the registration information route.
+- Registration details, participant/winner information, and other festival facts must come from the user; do not invent them.
 - The experience begins at the Sun and follows the Solar System order through Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune.
 - The left-side destination list supports direct selection; the portal advances to the next body in that order.
 - Current planet facts are provisional, concise science summaries and may be replaced by user-supplied copy. Keep facts accurate and do not add unsupported festival information.
@@ -13,6 +14,9 @@
 
 - Use the existing Next.js App Router, React, TypeScript, and Tailwind CSS 4 setup.
 - Keep route entry points in src/app; reusable experience UI belongs in src/components.
+- Keep the Home and Registration solar-system artwork decorative and CSS-based in src/components/home; it must not add a canvas/3D dependency or intercept input.
+- Use the Space video only as the loading-screen background. After the loading screen exits and Home is visible, preload the Sun video in the background. The Events route starts directly on the Sun video and does not play the Home intro.
+- Keep confirmed college and Technotsav copy in src/lib/planets.ts until it is intentionally moved into a shared content module.
 - Shared media URLs and planet data live in src/lib/planets.ts.
 - Keep browser interaction in the focused client component src/components/planet-portal/PlanetPortal.tsx.
 - Keep the canvas portal renderer lightweight and do not add a 3D engine or external JavaScript/CSS libraries.
@@ -26,7 +30,8 @@
 
 ## Animation and interaction
 
-- The portal canvas provides the masked, screen-locked media window and subtle pointer tilt.
+- The portal canvas provides the masked, screen-locked media window and subtle pointer tilt. Reveal the selected planet's first frame before starting playback; playback should begin near 80% reveal.
+- Planet media may idle-preload only one next destination in solar order. Explicit selection aborts that work and takes priority; skip background preloading on Save-Data and slow 2G connections.
 - Respect prefers-reduced-motion; retain a useful static presentation and working travel controls.
 - Pause the canvas loop while the page is hidden.
 - Support click and touch activation and visible keyboard focus.
@@ -34,7 +39,7 @@
 ## Accessibility and performance
 
 - Use semantic landmarks, real buttons and links, and meaningful accessible labels.
-- Keep all videos muted, inline, preloaded, and controlled by JavaScript.
+- Keep all videos muted, inline, and controlled by JavaScript. Preload only what the current route needs, plus at most one next planet while idle.
 - Cap canvas pixel ratio at 2 and redraw only while the page is visible.
 - Handle media load/play failures without trapping the page behind the preloader.
 - Avoid unrelated dependencies and backend functionality.
