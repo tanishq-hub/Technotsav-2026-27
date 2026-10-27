@@ -145,7 +145,7 @@ export function PlanetPortal() {
         setAboutTransition(null);
         aboutPanelLocked.current = false;
         aboutPanelTimer.current = null;
-      }, reduceMotion() ? 80 : 980);
+      }, reduceMotion() ? 80 : 720);
       return;
     }
 
@@ -180,7 +180,7 @@ export function PlanetPortal() {
   useEffect(() => {
     const shell = root.current;
     if (!shell) return;
-    let touchY: number | null = null;
+    let touchOrigin: { x: number; y: number } | null = null;
     let wheelDelta = 0;
     let wheelConsumed = false;
     let wheelIdleTimer = 0;
@@ -190,40 +190,44 @@ export function PlanetPortal() {
       if (event.ctrlKey || Math.abs(event.deltaY) < Math.abs(event.deltaX) || ignoredTarget(event.target)) return;
       event.preventDefault();
       window.clearTimeout(wheelIdleTimer);
-      wheelIdleTimer = window.setTimeout(() => { wheelDelta = 0; wheelConsumed = false; }, 280);
+      wheelIdleTimer = window.setTimeout(() => { wheelDelta = 0; wheelConsumed = false; }, 220);
       if (aboutPanelLocked.current || wheelConsumed || Math.abs(event.deltaY) < 1) return;
-      wheelDelta += event.deltaY;
-      if (Math.abs(wheelDelta) >= 48) {
+      const normalizedDelta = event.deltaY * (event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? window.innerHeight : 1);
+      wheelDelta += normalizedDelta;
+      if (Math.abs(wheelDelta) >= 28) {
         const direction = wheelDelta > 0 ? "forward" : "backward";
         wheelDelta = 0;
         wheelConsumed = true;
         movePanel(direction);
       }
     };
-    const touchStart = (event: TouchEvent) => {
-      if (event.touches.length !== 1 || ignoredTarget(event.target)) { touchY = null; return; }
-      touchY = event.touches[0].clientY;
+    const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1 || ignoredTarget(event.target)) { touchOrigin = null; return; }
+      touchOrigin = { x: event.touches[0].clientX, y: event.touches[0].clientY };
     };
     const touchMove = (event: TouchEvent) => {
-      if (touchY === null || event.touches.length !== 1) return;
+      if (touchOrigin === null || event.touches.length !== 1) return;
       event.preventDefault();
     };
     const touchEnd = (event: TouchEvent) => {
-      if (touchY !== null && event.changedTouches.length) {
-        const distance = touchY - event.changedTouches[0].clientY;
-        if (Math.abs(distance) > 42) movePanel(distance > 0 ? "forward" : "backward");
+      if (touchOrigin !== null && event.changedTouches.length) {
+        const distanceY = touchOrigin.y - event.changedTouches[0].clientY;
+        const distanceX = touchOrigin.x - event.changedTouches[0].clientX;
+        if (Math.abs(distanceY) > 28 && Math.abs(distanceY) > Math.abs(distanceX) * 1.15) {
+          movePanel(distanceY > 0 ? "forward" : "backward");
+        }
       }
-      touchY = null;
+      touchOrigin = null;
     };
     shell.addEventListener("wheel", wheel, { passive: false });
-    shell.addEventListener("touchstart", touchStart, { passive: true });
+    shell.addEventListener("touchstart", handleTouchStart, { passive: true });
     shell.addEventListener("touchmove", touchMove, { passive: false });
     shell.addEventListener("touchend", touchEnd);
     shell.addEventListener("touchcancel", touchEnd);
     return () => {
       window.clearTimeout(wheelIdleTimer);
       shell.removeEventListener("wheel", wheel);
-      shell.removeEventListener("touchstart", touchStart);
+      shell.removeEventListener("touchstart", handleTouchStart);
       shell.removeEventListener("touchmove", touchMove);
       shell.removeEventListener("touchend", touchEnd);
       shell.removeEventListener("touchcancel", touchEnd);

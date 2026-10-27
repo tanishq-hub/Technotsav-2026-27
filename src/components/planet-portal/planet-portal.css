@@ -24,10 +24,10 @@
 .about-panel{position:absolute;inset:0;display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);align-content:end;align-items:end;gap:clamp(30px,5vw,76px);padding:0 clamp(56px,7vw,108px) clamp(88px,14vh,132px) clamp(340px,26vw,430px);opacity:0;visibility:hidden;transform:translate3d(0,65vh,-130px) rotateX(18deg);transform-origin:50% 65%;backface-visibility:hidden}
 .about-panel.is-hidden{visibility:hidden}
 .about-panel.is-settled{opacity:1;visibility:visible;transform:none}
-.about-panel.is-entering-from-bottom{visibility:visible;animation:about-enter-up .98s cubic-bezier(.2,.8,.2,1) both}
-.about-panel.is-entering-from-top{visibility:visible;animation:about-enter-down .98s cubic-bezier(.2,.8,.2,1) both}
-.about-panel.is-leaving-up{visibility:visible;animation:about-leave-up .98s cubic-bezier(.2,.8,.2,1) both}
-.about-panel.is-leaving-down{visibility:visible;animation:about-leave-down .98s cubic-bezier(.2,.8,.2,1) both}
+.about-panel.is-entering-from-bottom{visibility:visible;animation:about-enter-up .72s cubic-bezier(.2,.8,.2,1) both}
+.about-panel.is-entering-from-top{visibility:visible;animation:about-enter-down .72s cubic-bezier(.2,.8,.2,1) both}
+.about-panel.is-leaving-up{visibility:visible;animation:about-leave-up .72s cubic-bezier(.2,.8,.2,1) both}
+.about-panel.is-leaving-down{visibility:visible;animation:about-leave-down .72s cubic-bezier(.2,.8,.2,1) both}
 .about-panel-title{max-width:560px}
 .about-panel-section{display:flex;align-items:center;gap:12px;margin:0 0 16px;color:#f6c66b;font-size:11px;font-weight:700;letter-spacing:.24em}
 .about-panel-section::before{content:"";width:32px;height:1px;background:#f6c66b;box-shadow:0 0 12px rgba(255,182,68,.8)}
@@ -78,10 +78,10 @@ body:not(.intro-ready) .planet-list,body:not(.intro-ready) .about-stage,body:not
 .neptune-end-panel{position:absolute;z-index:5;inset:0;display:grid;place-items:center;padding:clamp(112px,18vh,175px) clamp(20px,7vw,100px) clamp(64px,10vh,100px);opacity:0;visibility:hidden;transform:translate3d(0,65vh,-130px) rotateX(18deg);transform-origin:50% 65%;backface-visibility:hidden;pointer-events:none}
 .neptune-end-panel.is-hidden{visibility:hidden}
 .neptune-end-panel.is-settled{opacity:1;visibility:visible;transform:none}
-.neptune-end-panel.is-entering-from-bottom{visibility:visible;animation:about-enter-up .98s cubic-bezier(.2,.8,.2,1) both}
-.neptune-end-panel.is-entering-from-top{visibility:visible;animation:about-enter-down .98s cubic-bezier(.2,.8,.2,1) both}
-.neptune-end-panel.is-leaving-up{visibility:visible;animation:about-leave-up .98s cubic-bezier(.2,.8,.2,1) both}
-.neptune-end-panel.is-leaving-down{visibility:visible;animation:about-leave-down .98s cubic-bezier(.2,.8,.2,1) both}
+.neptune-end-panel.is-entering-from-bottom{visibility:visible;animation:about-enter-up .72s cubic-bezier(.2,.8,.2,1) both}
+.neptune-end-panel.is-entering-from-top{visibility:visible;animation:about-enter-down .72s cubic-bezier(.2,.8,.2,1) both}
+.neptune-end-panel.is-leaving-up{visibility:visible;animation:about-leave-up .72s cubic-bezier(.2,.8,.2,1) both}
+.neptune-end-panel.is-leaving-down{visibility:visible;animation:about-leave-down .72s cubic-bezier(.2,.8,.2,1) both}
 .experience[data-end-panel="true"] .planet-content{opacity:0;visibility:hidden}
 .neptune-end-content{display:grid;justify-items:center;width:min(1100px,100%);gap:14px;pointer-events:none;text-align:center}
 .neptune-end-eyebrow{margin:0;color:#f2c86f;font-size:10px;font-weight:700;letter-spacing:.28em;text-transform:uppercase}

@@ -32,5 +32,5 @@ html:has(.registration-page),body:has(.registration-page){height:auto;min-height
   .registration-content{flex:0 0 auto;min-height:500px;padding:46px 18px 42px}
   .registration-content::before{top:50%;width:min(820px,100%);height:calc(100% - 14px);max-height:none;border-radius:26px}
   .registration-content::after{top:27px;width:min(55vw,460px)}
-  .registration-page>.site-footer{flex:0 0 auto;margin:0 -16px}
+  .registration-page>.site-footer{flex:0 0 auto;width:calc(100% + 32px);margin:0 -16px}
 }
