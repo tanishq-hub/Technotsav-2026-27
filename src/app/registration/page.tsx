@@ -20,7 +20,7 @@ export default function RegistrationPage() {
       else video.pause();
     };
     video.addEventListener("canplay", play, { once: true });
-    video.load();
+    if (video.networkState === HTMLMediaElement.NETWORK_EMPTY) video.load();
     if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) play();
     return () => { video.removeEventListener("canplay", play); video.pause(); };
   }, []);

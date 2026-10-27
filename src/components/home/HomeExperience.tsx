@@ -56,19 +56,53 @@ function waitForFullBuffer(video: HTMLVideoElement, timeout: number, signal: Abo
   });
 }
 
-async function preloadVideo(url: string, signal: AbortSignal, onProgress: (fraction: number) => void = () => undefined) {
-  const response = await fetch(url, { cache: "default", credentials: "omit", mode: "cors", signal });
-  if (!response.ok || !response.body) throw new Error(`Video preload failed (${response.status})`);
-  const total = Number(response.headers.get("content-length"));
-  const reader = response.body.getReader();
-  let received = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    received += value.byteLength;
-    if (total > 0) onProgress(Math.min(1, received / total));
-  }
-  onProgress(1);
+const retainedPreloads = new Map<string, HTMLVideoElement>();
+
+function preloadVideo(url: string, signal: AbortSignal) {
+  const retained = retainedPreloads.get(url);
+  if (retained && isFullyBuffered(retained)) return Promise.resolve(true);
+
+  const video = document.createElement("video");
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = "auto";
+  if (url.startsWith(`${R2_MEDIA_ORIGIN}/`)) video.crossOrigin = "anonymous";
+  video.src = url;
+
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    const timeout = window.setTimeout(() => finish(false), 20_000);
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      video.removeEventListener("progress", check);
+      video.removeEventListener("loadedmetadata", check);
+      video.removeEventListener("canplaythrough", check);
+      video.removeEventListener("error", failed);
+      signal.removeEventListener("abort", aborted);
+    };
+    const finish = (complete: boolean) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (complete && !signal.aborted) retainedPreloads.set(url, video);
+      else {
+        video.pause();
+        video.removeAttribute("src");
+        video.load();
+      }
+      resolve(complete);
+    };
+    const check = () => { if (isFullyBuffered(video)) finish(true); };
+    const failed = () => finish(false);
+    const aborted = () => finish(false);
+    video.addEventListener("progress", check);
+    video.addEventListener("loadedmetadata", check);
+    video.addEventListener("canplaythrough", check);
+    video.addEventListener("error", failed, { once: true });
+    signal.addEventListener("abort", aborted, { once: true });
+    check();
+    video.load();
+  });
 }
 
 export function HomeExperience() {
@@ -89,10 +123,12 @@ export function HomeExperience() {
   useEffect(() => {
     if (!homeReady) return;
     const controller = new AbortController();
-    // Warm both route entry videos in parallel while the visitor is on Home.
+    // Warm the two route entry videos in parallel through native media requests.
+    // This lets playback use the browser's normal media cache instead of a full
+    // fetch followed by a second, separate video download.
     void Promise.all([
-      preloadVideo(ASSETS.sunVideo, controller.signal).catch(() => undefined),
-      preloadVideo(ASSETS.mercuryVideo, controller.signal).catch(() => undefined),
+      preloadVideo(ASSETS.sunVideo, controller.signal),
+      preloadVideo(ASSETS.mercuryVideo, controller.signal),
     ]);
     return () => controller.abort();
   }, [homeReady]);
@@ -151,7 +187,7 @@ export function HomeExperience() {
     document.addEventListener("visibilitychange", onVisibilityChange);
     video.loop = true;
     video.preload = "auto";
-    video.load();
+    if (video.networkState === HTMLMediaElement.NETWORK_EMPTY) video.load();
 
     if (video.readyState >= HTMLMediaElement.HAVE_METADATA) startPlayback();
 
@@ -203,16 +239,26 @@ export function HomeExperience() {
     }, 80);
     const spaceElement = spaceVideo.current;
     const spacePreload = async () => {
-      if (spaceElement && await waitForFullBuffer(spaceElement, 12_000, controller.signal, (value) => { spaceProgress = value; })) return;
-      try {
-        await preloadVideo(ASSETS.spaceVideo, controller.signal, (value) => { spaceProgress = value; });
-      } catch { /* the Home page remains usable if the loading-screen video host is unavailable */ }
+      if (spaceElement) {
+        await waitForFullBuffer(spaceElement, 12_000, controller.signal, (value) => { spaceProgress = value; });
+      }
+      // The loader has a fail-safe and must not start a second full fetch just
+      // because native media buffering did not finish within the wait window.
+      spaceProgress = 1;
     };
     const solarController = new AbortController();
     const abortSolarPreload = () => solarController.abort();
     controller.signal.addEventListener("abort", abortSolarPreload, { once: true });
     const solarFailSafe = window.setTimeout(abortSolarPreload, 15_000);
-    const solarPreload = preloadVideo(ASSETS.solarSystemVideo, solarController.signal, (value) => { solarProgress = value; })
+    const solarPreload = (async () => {
+      const solarVideo = solarSystemVideo.current;
+      if (solarVideo) {
+        solarVideo.preload = "auto";
+        if (solarVideo.networkState === HTMLMediaElement.NETWORK_EMPTY) solarVideo.load();
+        await waitForFullBuffer(solarVideo, 15_000, solarController.signal, (value) => { solarProgress = value; });
+      }
+      solarProgress = 1;
+    })()
       .catch(() => { solarProgress = 1; })
       .finally(() => window.clearTimeout(solarFailSafe));
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;

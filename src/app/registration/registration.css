@@ -24,3 +24,13 @@ html:has(.registration-page),body:has(.registration-page){height:auto;min-height
 .registration-back:hover{transform:translateY(-2px);border-color:rgba(242,200,111,.74);box-shadow:0 8px 24px rgba(0,0,0,.28),0 0 20px rgba(255,124,59,.16)}
 @media(max-width:520px){.registration-content::before{height:min(560px,72vh);border-radius:26px}.registration-content::after{top:calc(50% - min(280px,36vh));width:55vw}}
 @media(prefers-reduced-motion:reduce){.registration-back{transition:none}}
+
+/* On phones, place the registration card below the three-row shared header and
+   keep both it and the contact footer in normal document flow. */
+@media(max-width:640px){
+  .registration-page{min-height:100svh;padding:calc(174px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom))}
+  .registration-content{flex:0 0 auto;min-height:500px;padding:46px 18px 42px}
+  .registration-content::before{top:50%;width:min(820px,100%);height:calc(100% - 14px);max-height:none;border-radius:26px}
+  .registration-content::after{top:27px;width:min(55vw,460px)}
+  .registration-page>.site-footer{flex:0 0 auto;margin:0 -16px}
+}

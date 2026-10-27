@@ -76,26 +76,6 @@ function playbackEnded(media: HTMLMediaElement, timeout: number, signal?: AbortS
   });
 }
 
-async function downloadVideoIntoBrowserCache(
-  url: string,
-  signal: AbortSignal,
-  onProgress?: (progress: number) => void,
-) {
-  const response = await fetch(url, { cache: "default", credentials: "omit", mode: "cors", signal });
-  if (!response.ok || !response.body) throw new Error(`Video preload failed (${response.status})`);
-
-  const total = Number(response.headers.get("content-length"));
-  const reader = response.body.getReader();
-  let received = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    received += value.byteLength;
-    if (total > 0) onProgress?.(Math.min(1, received / total));
-  }
-  onProgress?.(1);
-}
-
 export function PlanetPortal() {
   const root = useRef<HTMLElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -112,6 +92,7 @@ export function PlanetPortal() {
   const [mobileHeaderAway, setMobileHeaderAway] = useState(false);
   const [aboutPanel, setAboutPanel] = useState(0);
   const [aboutTransition, setAboutTransition] = useState<AboutTransition | null>(null);
+  const [preloadRevision, setPreloadRevision] = useState(0);
   const state = useRef<PlanetDestination>("mercury");
   const tilt = useRef<XY>({ x: 0, y: 0 });
   const targetTilt = useRef<XY>({ x: 0, y: 0 });
@@ -311,6 +292,7 @@ export function PlanetPortal() {
       requestCanvasFrame.current();
       busy.current = false;
       if (transitionController.current === controller) transitionController.current = null;
+      setPreloadRevision((revision) => revision + 1);
     };
     const showDestinationWithoutTransition = async () => {
       if (signal.aborted) return;
@@ -332,14 +314,17 @@ export function PlanetPortal() {
 
     try {
       const destinationVideo = PLANET_STATES[destination].background;
-      // R2 must opt into CORS for its video frames to be drawn into the transition canvas.
-      if (destinationVideo.startsWith(`${R2_MEDIA_ORIGIN}/`)) video.crossOrigin = "anonymous";
-      else video.removeAttribute("crossorigin");
-      video.src = destinationVideo;
+      const requestedUrl = new URL(destinationVideo, document.baseURI).href;
+      const alreadyQueued = (video.currentSrc || video.src) === requestedUrl;
+      if (!alreadyQueued) {
+        // R2 must opt into CORS for its video frames to be drawn into the transition canvas.
+        if (destinationVideo.startsWith(`${R2_MEDIA_ORIGIN}/`)) video.crossOrigin = "anonymous";
+        else video.removeAttribute("crossorigin");
+        video.src = destinationVideo;
+      }
       shell.classList.remove("is-content-visible");
       shell.classList.add("is-loading");
       const transitionReady = ready(video, 5000, HTMLMediaElement.HAVE_CURRENT_DATA, signal);
-      video.load();
       if (!(await transitionReady)) {
         if (signal.aborted) return;
         // Keep navigation usable if the transition asset is slow or unavailable.
@@ -446,27 +431,18 @@ export function PlanetPortal() {
     const preload = () => {
       if (controller.signal.aborted) return;
       const url = PLANET_STATES[nextPlanet.key].background;
-      if (url.startsWith(`${R2_MEDIA_ORIGIN}/`)) {
-        void downloadVideoIntoBrowserCache(url, controller.signal).catch(() => undefined);
-        return;
-      }
-      // For the three externally hosted videos, let the media element use the
-      // browser's normal HTTP cache without requiring cross-origin fetch access.
-      const queuedVideo = document.createElement("video");
-      queuedVideo.muted = true;
-      queuedVideo.playsInline = true;
+      const queuedVideo = transitionVideo.current;
+      if (!queuedVideo) return;
+      const requestedUrl = new URL(url, document.baseURI).href;
+      if ((queuedVideo.currentSrc || queuedVideo.src) === requestedUrl) return;
+
+      // Reuse the transition player for the one-next-planet queue. If that
+      // planet is selected while preloading, travel() promotes this exact media
+      // element instead of doing another full fetch first.
+      if (url.startsWith(`${R2_MEDIA_ORIGIN}/`)) queuedVideo.crossOrigin = "anonymous";
+      else queuedVideo.removeAttribute("crossorigin");
       queuedVideo.preload = "auto";
       queuedVideo.src = url;
-      queuedVideo.load();
-      const cleanup = () => {
-        queuedVideo.pause();
-        queuedVideo.removeAttribute("src");
-        queuedVideo.load();
-        controller.signal.removeEventListener("abort", cleanup);
-      };
-      controller.signal.addEventListener("abort", cleanup, { once: true });
-      queuedVideo.addEventListener("canplaythrough", cleanup, { once: true });
-      window.setTimeout(cleanup, 25_000);
     };
     if (idleWindow.requestIdleCallback) {
       idleId = idleWindow.requestIdleCallback(preload, { timeout: 2500 });
@@ -478,7 +454,7 @@ export function PlanetPortal() {
       if (idleId && idleWindow.cancelIdleCallback) idleWindow.cancelIdleCallback(idleId);
       if (timeoutId) window.clearTimeout(timeoutId);
     };
-  }, [introComplete, planet]);
+  }, [introComplete, planet, preloadRevision]);
 
   useEffect(() => {
     const el = canvas.current;
@@ -598,7 +574,6 @@ export function PlanetPortal() {
     if (!background || !introComplete) return;
     background.loop = true;
     background.pause();
-    background.load();
     const replayOnEnd = () => {
       background.currentTime = 0;
       void background.play().catch(() => undefined);
