@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { GROUP_REGISTRATION_EVENTS, INDIVIDUAL_REGISTRATION_EVENTS } from "@/lib/registration";
 
 type RegistrationType = "group" | "individual";
@@ -11,7 +11,16 @@ export function RegistrationForm() {
   const [groupEventId, setGroupEventId] = useState<(typeof GROUP_REGISTRATION_EVENTS)[number]["id"]>(GROUP_REGISTRATION_EVENTS[0].id);
   const [status, setStatus] = useState<SubmitState>("idle");
   const [message, setMessage] = useState("");
+  const [successDialogOpen, setSuccessDialogOpen] = useState(false);
+  const successDialog = useRef<HTMLDialogElement>(null);
   const selectedGroupEvent = GROUP_REGISTRATION_EVENTS.find((event) => event.id === groupEventId) ?? GROUP_REGISTRATION_EVENTS[0];
+
+  useEffect(() => {
+    const dialog = successDialog.current;
+    if (!dialog) return;
+    if (successDialogOpen && !dialog.open) dialog.showModal();
+    if (!successDialogOpen && dialog.open) dialog.close();
+  }, [successDialogOpen]);
 
   function switchType(nextType: RegistrationType) {
     setType(nextType);
@@ -59,7 +68,8 @@ export function RegistrationForm() {
       const result = await response.json() as { message?: string };
       if (!response.ok) throw new Error(result.message || "We could not submit your registration. Please try again.");
       setStatus("success");
-      setMessage("Thank you! Your registration was successful.");
+      setMessage("");
+      setSuccessDialogOpen(true);
       form.reset();
       setType("individual");
       setGroupEventId(GROUP_REGISTRATION_EVENTS[0].id);
@@ -193,9 +203,21 @@ export function RegistrationForm() {
         role={status === "success" || status === "error" ? "alert" : "status"}
         aria-live={status === "error" ? "assertive" : "polite"}
       >
-        {message && status === "success" && <span aria-hidden="true">✓</span>}
         {message}
       </p>
+      <dialog
+        ref={successDialog}
+        className="registration-success-dialog"
+        aria-labelledby="registration-success-title"
+        aria-describedby="registration-success-message"
+        onClose={() => setSuccessDialogOpen(false)}
+      >
+        <span className="registration-success-icon" aria-hidden="true">✓</span>
+        <p className="registration-success-eyebrow">TRANSMISSION CONFIRMED</p>
+        <h3 id="registration-success-title">Registration complete</h3>
+        <p id="registration-success-message">Thank you! Your registration was successful.</p>
+        <button type="button" onClick={() => setSuccessDialogOpen(false)} autoFocus>Continue</button>
+      </dialog>
     </form>
   );
 }

@@ -358,7 +358,7 @@ export function HomeExperience() {
                 <span className="home-committee-index">{String(index + 1).padStart(2, "0")}</span>
                 <h4>{member.name}</h4>
                 <p>{member.role}</p>
-                <a href={`tel:${member.phone}`} aria-label={`Call ${member.name}, ${member.phone}`}>{member.phone}</a>
+                <a href={`tel:+91${member.phone}`} aria-label={`Call ${member.name} at +91 ${member.phone}`}>+91 {member.phone}</a>
               </article>
             ))}
           </div>
