@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { ASSETS, R2_MEDIA_ORIGIN, SUN_ABOUT_PANELS } from "@/lib/planets";
-import { FESTIVAL_DETAILS, FESTIVAL_EVENTS } from "@/lib/festival";
+import { CORE_COMMITTEE, FESTIVAL_DETAILS, FESTIVAL_EVENTS } from "@/lib/festival";
 import { SiteFooter } from "@/components/shared/SiteFooter";
 import { SiteHeader } from "@/components/shared/SiteHeader";
 import "./home-experience.css";
@@ -342,6 +342,23 @@ export function HomeExperience() {
                 <span className="home-event-index">{String(index + 1).padStart(2, "0")}</span>
                 <h4>{event.name}</h4>
                 <p>{event.description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+        <section className="home-committee" aria-labelledby="committee-title" data-reveal>
+          <div className="home-committee-heading">
+            <p className="home-eyebrow">The people behind the mission</p>
+            <h3 id="committee-title">Core Committee</h3>
+            <p>Meet the student team coordinating this year’s festival.</p>
+          </div>
+          <div className="home-committee-grid">
+            {CORE_COMMITTEE.map((member, index) => (
+              <article className="home-committee-card" key={member.phone}>
+                <span className="home-committee-index">{String(index + 1).padStart(2, "0")}</span>
+                <h4>{member.name}</h4>
+                <p>{member.role}</p>
+                <a href={`tel:${member.phone}`} aria-label={`Call ${member.name}, ${member.phone}`}>{member.phone}</a>
               </article>
             ))}
           </div>

@@ -10,6 +10,7 @@ export type EventPanel = {
 export type PlanetEvent = {
   flyerTitle: string;
   eventName: string;
+  rounds: string;
   panels: EventPanel[];
 };
 
@@ -18,6 +19,7 @@ export const PLANET_EVENTS: Record<PlanetDestination, PlanetEvent> = {
   mercury: {
     flyerTitle: "Code in Dark",
     eventName: "Blind Typing",
+    rounds: "Two progressive rounds · Moderate, then Hard",
     panels: [
       {
         section: "The challenge",
@@ -50,6 +52,7 @@ export const PLANET_EVENTS: Record<PlanetDestination, PlanetEvent> = {
   venus: {
     flyerTitle: "Web Verse",
     eventName: "Web Designing Competition",
+    rounds: "One 60-minute round",
     panels: [
       {
         section: "The challenge",
@@ -82,6 +85,7 @@ export const PLANET_EVENTS: Record<PlanetDestination, PlanetEvent> = {
   earth: {
     flyerTitle: "Cosmic Hunt",
     eventName: "Digital Detour · Treasure Hunt",
+    rounds: "Six QR-linked clues · 30-minute limit",
     panels: [
       {
         section: "The challenge",
@@ -114,6 +118,7 @@ export const PLANET_EVENTS: Record<PlanetDestination, PlanetEvent> = {
   mars: {
     flyerTitle: "Cyber Arena",
     eventName: "BGMI · Stumble Guys",
+    rounds: "Match-specific rounds to be announced by organizers",
     panels: [
       {
         section: "The challenge",
@@ -146,6 +151,7 @@ export const PLANET_EVENTS: Record<PlanetDestination, PlanetEvent> = {
   jupiter: {
     flyerTitle: "Astro Bots",
     eventName: "RoboGrip",
+    rounds: "One race attempt · maximum 7 minutes",
     panels: [
       {
         section: "The challenge",
@@ -178,6 +184,7 @@ export const PLANET_EVENTS: Record<PlanetDestination, PlanetEvent> = {
   saturn: {
     flyerTitle: "Orbit Hack",
     eventName: "Bug Bounty",
+    rounds: "Two rounds · 20 minutes, then 45 minutes",
     panels: [
       {
         section: "The challenge",
@@ -210,6 +217,7 @@ export const PLANET_EVENTS: Record<PlanetDestination, PlanetEvent> = {
   uranus: {
     flyerTitle: "The Cosmic Matrix",
     eventName: "Prompt War",
+    rounds: "Three timed rounds · 10, 7, and 7 minutes",
     panels: [
       {
         section: "The challenge",
@@ -242,6 +250,7 @@ export const PLANET_EVENTS: Record<PlanetDestination, PlanetEvent> = {
   neptune: {
     flyerTitle: "Astro Bitz",
     eventName: "Quiztron · IT Quiz",
+    rounds: "Three rounds · AI Battle, AI Circuit, and AI Master Round",
     panels: [
       {
         section: "The challenge",

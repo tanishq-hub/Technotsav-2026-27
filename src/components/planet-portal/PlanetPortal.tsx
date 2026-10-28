@@ -587,7 +587,6 @@ export function PlanetPortal() {
     return () => background.removeEventListener("ended", replayOnEnd);
   }, [backgroundPlanet, introComplete]);
 
-  const cfg = PLANET_STATES[planet];
   const event = PLANET_EVENTS[planet];
   const eventEndPanel = event.panels.length + 1;
   const footerPanel = planet === "neptune" ? eventEndPanel : -1;
@@ -614,10 +613,10 @@ export function PlanetPortal() {
           <nav className="mobile-destinations" id="mobile-destinations" aria-label="Planet destinations" hidden={!menuOpen}>
             <p className="destination-heading">Choose a destination</p>
             <div className="destination-options">
-              {PLANETS.map(({ key, name }, index) => (
+              {PLANETS.map(({ key }, index) => (
                 <button className={key === selectedPlanet ? "destination-option active" : "destination-option"} key={key} type="button" aria-current={key === selectedPlanet ? "step" : undefined} onClick={() => { setMenuOpen(false); void travel(key); }}>
                   <span className="destination-index">{String(index + 1).padStart(2, "0")}</span>
-                  <span>{name}</span>
+                  <span>{PLANET_EVENTS[key].flyerTitle}</span>
                   {key === selectedPlanet && <span className="destination-current">Selected</span>}
                 </button>
               ))}
@@ -629,7 +628,7 @@ export function PlanetPortal() {
       <div className="shade" aria-hidden="true" />
 
       <aside className={switching ? "planet-list chrome is-switching" : "planet-list chrome"} id="planet-list" aria-label="Choose a destination">
-        {PLANETS.map(({ key, name }) => <button className={key === selectedPlanet ? "planet-item active" : "planet-item"} key={key} type="button" aria-current={key === selectedPlanet ? "step" : undefined} onClick={() => { setMenuOpen(false); void travel(key); }}>{name}</button>)}
+        {PLANETS.map(({ key }) => <button className={key === selectedPlanet ? "planet-item active" : "planet-item"} key={key} type="button" aria-current={key === selectedPlanet ? "step" : undefined} onClick={() => { setMenuOpen(false); void travel(key); }}>{PLANET_EVENTS[key].flyerTitle}</button>)}
       </aside>
 
       <canvas ref={canvas} className="transition-canvas" aria-hidden="true" />
@@ -641,7 +640,7 @@ export function PlanetPortal() {
         className={aboutPanel === 0 ? "planet-content chrome is-active" : "planet-content chrome is-inactive"}
         aria-hidden={aboutPanel !== 0}
         tabIndex={aboutPanel === 0 ? 0 : -1}
-        aria-label={cfg.name + " facts and event information. Use scrolling, swiping, or arrow keys to continue through the event details."}
+        aria-label={event.flyerTitle + " event overview. Use scrolling, swiping, or arrow keys to continue through the event details."}
         onKeyDown={(event) => {
           const direction = ["ArrowDown", "PageDown", " "].includes(event.key) ? "forward"
             : ["ArrowUp", "PageUp"].includes(event.key) ? "backward" : null;
@@ -649,10 +648,15 @@ export function PlanetPortal() {
         }}
       >
         <div className="planet-heading-group">
-          <h1>{cfg.name.toUpperCase()}</h1>
-          <p className="planet-event-identity"><strong>{event.flyerTitle}</strong><span>{event.eventName}</span></p>
+          <h1>{event.flyerTitle}</h1>
+          <p className="planet-event-identity"><span>{event.eventName}</span></p>
         </div>
-        <dl>{cfg.facts.map(([term, value]) => <div className="fact" key={term}><dt>{term}</dt><dd>{value}</dd></div>)}</dl>
+        <dl className="event-overview-details">
+          <div className="fact"><dt>Date</dt><dd>Friday, 27 November 2026</dd></div>
+          <div className="fact"><dt>Time</dt><dd>To be announced</dd></div>
+          <div className="fact"><dt>Venue</dt><dd>Event lab · details to be announced</dd></div>
+          <div className="fact"><dt>Rounds</dt><dd>{event.rounds}</dd></div>
+        </dl>
       </section>
       {event.panels.map((panel, index) => {
         const panelIndex = index + 1;
