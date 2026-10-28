@@ -59,7 +59,7 @@ export function RegistrationForm() {
       const result = await response.json() as { message?: string };
       if (!response.ok) throw new Error(result.message || "We could not submit your registration. Please try again.");
       setStatus("success");
-      setMessage(result.message || "Registration received. Thank you!");
+      setMessage("Thank you! Your registration was successful.");
       form.reset();
       setType("individual");
       setGroupEventId(GROUP_REGISTRATION_EVENTS[0].id);
@@ -187,7 +187,15 @@ export function RegistrationForm() {
           {status === "submitting" ? "Sending registration…" : "Submit registration"}<span aria-hidden="true">↗</span>
         </button>
       </div>
-      <p id="registration-submit-status" className={`registration-submit-status is-${status}`} role="status" aria-live="polite">{message}</p>
+      <p
+        id="registration-submit-status"
+        className={`registration-submit-status is-${status}`}
+        role={status === "success" || status === "error" ? "alert" : "status"}
+        aria-live={status === "error" ? "assertive" : "polite"}
+      >
+        {message && status === "success" && <span aria-hidden="true">✓</span>}
+        {message}
+      </p>
     </form>
   );
 }
