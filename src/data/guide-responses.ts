@@ -30,7 +30,7 @@ export const GUIDE_INTENTS: GuideIntent[] = [
   },
   {
     phrases: ["what is technotsav", "about technotsav", "tell me about technotsav", "festival", "intercollegiate"],
-    response: "Technotsav is an intercollegiate technical festival started in 2013 by the Department of B.Sc. IT, CS and DS. It gives undergraduate and postgraduate students a platform to showcase their technical skills and enthusiasm.",
+    response: "Technotsav is an intercollegiate technical festival started in 2013 by the departments of B.Sc. IT, CS, DS, and AI/ML. It gives undergraduate and postgraduate students a platform to showcase their technical skills and enthusiasm.",
     followUps: ["What activities are listed?", "What is the theme?", "When is the festival?"],
   },
   {

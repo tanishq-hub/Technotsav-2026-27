@@ -49,7 +49,7 @@ export const SUN_ABOUT_PANELS: AboutPanel[] = [
     section: "ABOUT TECHNOTSAV",
     title: "A technical festival since 2013",
     paragraphs: [
-      "Technotsav is an intercollegiate technical festival started in 2013 by the Department of B.Sc. IT, CS and DS.",
+      "Technotsav is an intercollegiate technical festival started in 2013 by the departments of B.Sc. IT, CS, DS, and AI/ML.",
       "It aims to provide a platform for UG and PG students to showcase their technical prowess, talent, and enthusiasm.",
     ],
   },

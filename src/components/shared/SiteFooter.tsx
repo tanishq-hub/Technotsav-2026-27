@@ -26,6 +26,7 @@ export function SiteFooter({ variant = "default" }: SiteFooterProps) {
         </div>
         <div className="site-footer-detail">
           <span className="site-footer-label">Instagram</span>
+          <a href={FESTIVAL_DETAILS.officialInstagramUrl} target="_blank" rel="noreferrer">@nmfc_official</a>
           <a href={`https://www.instagram.com/${FESTIVAL_DETAILS.instagram}/`} target="_blank" rel="noreferrer">@{FESTIVAL_DETAILS.instagram}</a>
         </div>
         <div className="site-footer-detail">

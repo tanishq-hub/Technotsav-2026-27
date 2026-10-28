@@ -1,10 +1,11 @@
 export const FESTIVAL_DETAILS = {
   date: "Friday, 27 November 2026",
   college: "Nirmala Memorial Foundation College of Commerce and Science (Autonomous)",
-  departments: "B.Sc. I.T., B.Sc. C.S., B.Sc. D.S. & B.Sc. AI & ML",
+  departments: "B.Sc. I.T., B.Sc. C.S., B.Sc. D.S. & B.Sc. AI/ML",
   venue: "Kandivali (E), Mumbai",
   email: "techclub@nirmala.edu.in",
   instagram: "nmfc_technotsav",
+  officialInstagramUrl: "https://www.instagram.com/nmfc_official?dlrf=ZDNlZDc0MzIxNw==",
   website: "nmfdegree.edu.in",
 } as const;
 
