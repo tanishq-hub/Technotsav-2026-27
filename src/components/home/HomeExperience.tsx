@@ -315,7 +315,7 @@ export function HomeExperience() {
         <div className="home-hero-shade" />
         <div className="home-hero-copy">
           <p className="home-eyebrow">11th edition <span>·</span> 2026–27</p>
-          <p className="home-kicker">Nirmala Memorial Foundation College of Commerce and Science</p>
+          <p className="home-kicker">Nirmala Memorial Foundation College of Commerce and Science (Autonomous)</p>
           <h1 id="home-title">Decoding Infinity.<br /><em>Defining Tomorrow.</em></h1>
           <p className="home-theme">A journey through <strong>Space × AI</strong></p>
           <Link className="home-cta" href="/events">Explore the planets <span aria-hidden="true">↗</span></Link>
