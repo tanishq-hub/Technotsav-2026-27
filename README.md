@@ -1,6 +1,6 @@
 # Technotsav 2026–27 — Space × AI
 
-A single-page cinematic space experience built with Next.js, React, TypeScript, and Tailwind CSS 4. Visitors begin at the Sun and can select destinations across the Solar System. The Next.js application is the single maintained website implementation.
+A cinematic space experience built with Next.js, React, TypeScript, and Tailwind CSS 4. Visitors arrive at Home, explore the event portal beginning with Mercury, and find registration on the Registration route. The Next.js application is the single maintained website implementation.
 
 ## Run locally
 
