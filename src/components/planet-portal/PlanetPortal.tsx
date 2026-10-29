@@ -9,7 +9,7 @@ import "./planet-portal.css";
 
 type XY = { x: number; y: number };
 type AboutTransition = { from: number; to: number; direction: "forward" | "backward" };
-const ease = (t: number) => t < .5 ? 4 * t ** 3 : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const ease = (t: number) => 1 - Math.pow(1 - t, 3.2);
 const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function panelCountFor(planet: PlanetDestination) {
@@ -127,7 +127,7 @@ export function PlanetPortal() {
         setAboutTransition(null);
         aboutPanelLocked.current = false;
         aboutPanelTimer.current = null;
-      }, reduceMotion() ? 80 : 560);
+      }, reduceMotion() ? 80 : 640);
       return;
     }
 
@@ -175,7 +175,7 @@ export function PlanetPortal() {
       event.preventDefault();
 
       const now = performance.now();
-      if (now - lastTriggerTime < 520 || aboutPanelLocked.current) return;
+      if (now - lastTriggerTime < 640 || aboutPanelLocked.current) return;
 
       const normalizedDelta = event.deltaY * (event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? window.innerHeight : 1);
       if (Math.abs(normalizedDelta) < 1) return;
@@ -188,9 +188,9 @@ export function PlanetPortal() {
       wheelDelta += normalizedDelta;
 
       window.clearTimeout(wheelIdleTimer);
-      wheelIdleTimer = window.setTimeout(() => { wheelDelta = 0; }, 140);
+      wheelIdleTimer = window.setTimeout(() => { wheelDelta = 0; }, 160);
 
-      if (Math.abs(wheelDelta) >= 26) {
+      if (Math.abs(wheelDelta) >= 30) {
         const direction = wheelDelta > 0 ? "forward" : "backward";
         wheelDelta = 0;
         lastTriggerTime = now;
@@ -208,10 +208,10 @@ export function PlanetPortal() {
     const touchEnd = (event: TouchEvent) => {
       if (touchOrigin !== null && event.changedTouches.length) {
         const now = performance.now();
-        if (now - lastTriggerTime >= 520 && !aboutPanelLocked.current) {
+        if (now - lastTriggerTime >= 640 && !aboutPanelLocked.current) {
           const distanceY = touchOrigin.y - event.changedTouches[0].clientY;
           const distanceX = touchOrigin.x - event.changedTouches[0].clientX;
-          if (Math.abs(distanceY) > 26 && Math.abs(distanceY) > Math.abs(distanceX) * 1.15) {
+          if (Math.abs(distanceY) > 30 && Math.abs(distanceY) > Math.abs(distanceX) * 1.2) {
             lastTriggerTime = now;
             movePanel(distanceY > 0 ? "forward" : "backward");
           }
@@ -348,15 +348,16 @@ export function PlanetPortal() {
       // Pre-warm background video in parallel so handoff at the end is instantaneous
       setBackgroundPlanet(destination);
 
-      // Reveal the destination video as a still first frame. Playback begins near 80% reveal.
-      await animateValue((v) => { if (!signal.aborted) expansion.current = v * 0.8; }, 520);
-      if (signal.aborted) return;
-
-      void video.play().catch(() => undefined);
-      requestCanvasFrame.current();
-
-      // Expand the remaining 20% to full screen smoothly
-      await animateValue((v) => { if (!signal.aborted) expansion.current = 0.8 + v * 0.2; }, 260);
+      // Seamless continuous portal reveal: start on still frame, trigger smooth playback at 72% reveal, glide to 100%
+      let playbackStarted = false;
+      await animateValue((v) => {
+        if (signal.aborted) return;
+        expansion.current = v;
+        if (!playbackStarted && v >= 0.72) {
+          playbackStarted = true;
+          void video.play().catch(() => undefined);
+        }
+      }, 760);
       if (signal.aborted) return;
 
       revealDestination();
@@ -519,7 +520,7 @@ export function PlanetPortal() {
           const cx = w / 2, cy = startCenterY + (h / 2 - startCenterY) * e;
           const rw = startWidth + (w - startWidth) * e;
           const rh = startHeight + (h - startHeight) * e;
-          const radius = Math.min(rw, rh) / 2 * (1 - e);
+          const radius = (Math.min(rw, rh) / 2) * Math.pow(1 - e, 1.4);
           const rx = reduceMotion() ? 0 : tilt.current.x * (1 - e);
           const ry = reduceMotion() ? 0 : tilt.current.y * (1 - e);
           if (rw > 1 && rh > 1) {
