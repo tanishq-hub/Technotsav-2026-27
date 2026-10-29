@@ -13,9 +13,10 @@ export const ASSETS = {
   saturnVideo: `${R2_PLANET_MEDIA}/saturn_v1.mp4`,
   uranusVideo: `${R2_PLANET_MEDIA}/uranus_v1.mp4`,
   neptuneVideo: `${R2_PLANET_MEDIA}/neptune_v1.mp4`,
+  plutoVideo: "/pluto.mp4",
 } as const;
 
-export type PlanetKey = "sun" | "mercury" | "venus" | "earth" | "mars" | "jupiter" | "saturn" | "uranus" | "neptune";
+export type PlanetKey = "sun" | "mercury" | "venus" | "earth" | "mars" | "jupiter" | "saturn" | "uranus" | "neptune" | "pluto";
 export type PlanetDestination = Exclude<PlanetKey, "sun">;
 
 export type AboutPanel = {
@@ -73,6 +74,7 @@ export const PLANETS: { key: PlanetDestination; name: string }[] = [
   { key: "saturn", name: "Orbit Hack" },
   { key: "uranus", name: "The Cosmic Matrix" },
   { key: "neptune", name: "Astro Bitz" },
+  { key: "pluto", name: "Orbital Expo" },
 ];
 
 type PlanetState = {
@@ -92,5 +94,6 @@ export const PLANET_STATES: Record<PlanetKey, PlanetState> = {
   jupiter: { name: "Jupiter", next: "saturn", number: "[06]", background: ASSETS.jupiterVideo, facts: [["Distance:", "About 778 million km (5.2 astronomical units) from the Sun."], ["Year:", "About 11.9 Earth years."], ["Temperature:", "Cloud-top temperatures average about -110 °C."], ["Atmosphere:", "Mostly hydrogen and helium, with clouds and powerful storms."]] },
   saturn: { name: "Saturn", next: "uranus", number: "[07]", background: ASSETS.saturnVideo, facts: [["Distance:", "About 1.43 billion km (9.6 astronomical units) from the Sun."], ["Year:", "About 29.4 Earth years."], ["Temperature:", "Cloud-top temperatures average about -140 °C."], ["Atmosphere:", "Mostly hydrogen and helium, with visible cloud bands and storms."]] },
   uranus: { name: "Uranus", next: "neptune", number: "[08]", background: ASSETS.uranusVideo, facts: [["Distance:", "About 2.87 billion km (19.2 astronomical units) from the Sun."], ["Year:", "About 84 Earth years."], ["Temperature:", "Atmospheric temperatures can fall to about -195 °C."], ["Atmosphere:", "Hydrogen and helium, with methane that contributes to its blue-green color."]] },
-  neptune: { name: "Neptune", next: null, number: "[09]", background: ASSETS.neptuneVideo, facts: [["Distance:", "About 4.5 billion km (30 astronomical units) from the Sun."], ["Year:", "About 165 Earth years."], ["Temperature:", "Atmospheric temperatures can fall to about -200 °C."], ["Atmosphere:", "Hydrogen and helium with methane; winds can exceed 2,000 km/h."]] },
+  neptune: { name: "Neptune", next: "pluto", number: "[09]", background: ASSETS.neptuneVideo, facts: [["Distance:", "About 4.5 billion km (30 astronomical units) from the Sun."], ["Year:", "About 165 Earth years."], ["Temperature:", "Atmospheric temperatures can fall to about -200 °C."], ["Atmosphere:", "Hydrogen and helium with methane; winds can exceed 2,000 km/h."]] },
+  pluto: { name: "Pluto", next: null, number: "[10]", background: ASSETS.plutoVideo, facts: [["Distance:", "About 5.9 billion km (39.5 AU) from the Sun."], ["Year:", "About 248 Earth years."], ["Temperature:", "Surface temperatures average around -230 °C."], ["Atmosphere:", "A tenuous atmosphere of nitrogen, methane, and carbon monoxide."]] },
 };

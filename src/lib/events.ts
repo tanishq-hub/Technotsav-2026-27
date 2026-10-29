@@ -272,5 +272,30 @@ export const PLANET_EVENTS: Record<PlanetDestination, PlanetEvent> = {
       },
     ],
   },
+  pluto: {
+    flyerTitle: "Orbital Expo",
+    eventName: "Project Exhibition",
+    rounds: "Group event · Teams of 2 to 4",
+    panels: [
+      {
+        section: "The challenge",
+        title: "Innovate and exhibit.",
+        paragraphs: [
+          "Orbital Expo is an intercollegiate working model and project exhibition competition.",
+          "Teams of 2 to 4 participants showcase their innovative software, hardware, or AI/ML solutions before a panel of expert judges.",
+        ],
+        highlights: ["Group event · Teams of 2–4", "Working models & software", "Inter-collegiate competition"],
+      },
+      {
+        section: "Event details",
+        title: "Registration & submission.",
+        paragraphs: [
+          "Event date: Friday, 27 November 2026. Start time: 10 am onwards.",
+          "Registration for Orbital Expo is conducted via its dedicated Google Form. Submit team members and project abstracts to enter.",
+        ],
+        highlights: ["Google Form registration", "Awards & certificates"],
+      },
+    ],
+  },
 };
 

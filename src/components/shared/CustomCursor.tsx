@@ -16,13 +16,28 @@ export function CustomCursor() {
     let targetX = 0;
     let targetY = 0;
     let frame = 0;
+    let lastTime = 0;
 
-    const animate = () => {
-      x += (targetX - x) * 0.2;
-      y += (targetY - y) * 0.2;
-      node.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-      if (Math.abs(targetX - x) + Math.abs(targetY - y) > 0.25) frame = requestAnimationFrame(animate);
-      else { x = targetX; y = targetY; frame = 0; }
+    const animate = (time: number) => {
+      if (!lastTime) lastTime = time;
+      const dt = Math.min(32, time - lastTime);
+      lastTime = time;
+
+      // Delta-time based smooth glide (adapts seamlessly across 60Hz, 120Hz, and 144Hz displays)
+      const factor = 1 - Math.exp(-dt * 0.016);
+      x += (targetX - x) * factor;
+      y += (targetY - y) * factor;
+      node.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0)`;
+
+      if (Math.abs(targetX - x) + Math.abs(targetY - y) > 0.1) {
+        frame = requestAnimationFrame(animate);
+      } else {
+        x = targetX;
+        y = targetY;
+        node.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0)`;
+        frame = 0;
+        lastTime = 0;
+      }
     };
     const move = (event: PointerEvent) => {
       if (event.pointerType === "touch") {
@@ -43,18 +58,23 @@ export function CustomCursor() {
       if (reducedMotion.matches) {
         cancelAnimationFrame(frame);
         frame = 0;
+        lastTime = 0;
         x = targetX;
         y = targetY;
         node.style.transform = `translate3d(${x}px, ${y}px, 0)`;
         return;
       }
-      if (!frame) frame = requestAnimationFrame(animate);
+      if (!frame) {
+        lastTime = performance.now();
+        frame = requestAnimationFrame(animate);
+      }
     };
     const leave = () => {
       node.classList.remove("is-visible", "is-enter", "is-pressing");
       delete document.documentElement.dataset.customCursor;
       cancelAnimationFrame(frame);
       frame = 0;
+      lastTime = 0;
     };
     const pointerOut = (event: PointerEvent) => {
       if (!event.relatedTarget) leave();

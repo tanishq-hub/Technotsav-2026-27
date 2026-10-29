@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { GROUP_REGISTRATION_EVENTS, INDIVIDUAL_REGISTRATION_EVENTS } from "@/lib/registration";
+import { GROUP_REGISTRATION_EVENTS, INDIVIDUAL_REGISTRATION_EVENTS, ORBITAL_EXPO_GOOGLE_FORM_URL } from "@/lib/registration";
 
 type RegistrationType = "group" | "individual";
 type SubmitState = "idle" | "submitting" | "success" | "error";
@@ -14,6 +14,8 @@ export function RegistrationForm() {
   const [successDialogOpen, setSuccessDialogOpen] = useState(false);
   const successDialog = useRef<HTMLDialogElement>(null);
   const selectedGroupEvent = GROUP_REGISTRATION_EVENTS.find((event) => event.id === groupEventId) ?? GROUP_REGISTRATION_EVENTS[0];
+  const isExternalGroupEvent = type === "group" && selectedGroupEvent.id === "orbital-expo";
+  const externalFormUrl = ("externalUrl" in selectedGroupEvent && selectedGroupEvent.externalUrl) || ORBITAL_EXPO_GOOGLE_FORM_URL;
 
   useEffect(() => {
     const dialog = successDialog.current;
@@ -30,6 +32,10 @@ export function RegistrationForm() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isExternalGroupEvent) {
+      window.open(externalFormUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
     setStatus("submitting");
     setMessage("");
     const form = event.currentTarget;
@@ -129,37 +135,80 @@ export function RegistrationForm() {
                   {GROUP_REGISTRATION_EVENTS.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}
                 </select>
               </label>
-              <label className="registration-field registration-field-wide" htmlFor="group-name">
-                <span>Group Name <b aria-hidden="true">*</b></span>
-                <input id="group-name" name="groupName" type="text" maxLength={80} placeholder="Enter your group name" required />
-              </label>
-              <div className="registration-participant-fields registration-field-wide">
-                <div className="registration-participant-heading">
-                  <span>Full names of participants <b aria-hidden="true">*</b></span>
-                  <small>{selectedGroupEvent.min === selectedGroupEvent.max ? `Exactly ${selectedGroupEvent.max} participants` : `${selectedGroupEvent.min}–${selectedGroupEvent.max} participants`}</small>
+              {isExternalGroupEvent ? (
+                <div className="registration-external-card registration-field-wide">
+                  <div className="registration-external-badge">
+                    <span aria-hidden="true">✦</span>
+                    <span>Google Form Registration</span>
+                  </div>
+                  <h3>Orbital Expo · Team Registration</h3>
+                  <p className="registration-external-intro">
+                    Registrations and project submissions for <strong>Orbital Expo</strong> are conducted exclusively through Google Forms. Please use the link below to submit your project title, team members, and abstract.
+                  </p>
+                  <div className="registration-external-metrics">
+                    <div className="registration-external-metric">
+                      <span className="metric-label">Team Size</span>
+                      <span className="metric-value">2 to 4 Participants</span>
+                    </div>
+                    <div className="registration-external-metric">
+                      <span className="metric-label">Event Date</span>
+                      <span className="metric-value">Friday, 27 November 2026</span>
+                    </div>
+                    <div className="registration-external-metric">
+                      <span className="metric-label">Format</span>
+                      <span className="metric-value">Intercollegiate Exhibition</span>
+                    </div>
+                  </div>
+                  <div className="registration-external-cta-box">
+                    <a
+                      className="registration-google-form-btn"
+                      href={externalFormUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <span>Open Orbital Expo Google Form</span>
+                      <span aria-hidden="true">↗</span>
+                    </a>
+                    <p className="registration-external-help">
+                      Opens in a new tab. Ensure all team members&apos; details and project summaries are filled accurately.
+                    </p>
+                  </div>
                 </div>
-                {Array.from({ length: selectedGroupEvent.max }, (_, index) => {
-                  const required = index < selectedGroupEvent.min;
-                  return (
-                    <label className="registration-field" htmlFor={`group-participant-${index + 1}`} key={`${groupEventId}-${index}`}>
-                      <span>Participant {index + 1}{required ? <b aria-hidden="true"> *</b> : <small> (optional)</small>}</span>
-                      <input id={`group-participant-${index + 1}`} name={`participant${index + 1}`} type="text" autoComplete="name" maxLength={100} placeholder={`Name as it should appear on the certificate`} required={required} />
-                    </label>
-                  );
-                })}
-              </div>
-              <label className="registration-field" htmlFor="leader-phone">
-                <span>Group Leader WhatsApp <b aria-hidden="true">*</b></span>
-                <input id="leader-phone" name="leaderPhone" type="tel" inputMode="tel" autoComplete="tel" pattern="(?:\+?91[\s-]?)?[6-9][0-9\s-]{9,13}" title="Enter a valid Indian mobile number, with or without +91." placeholder="10-digit mobile number" required />
-              </label>
-              <label className="registration-field" htmlFor="alternate-phone">
-                <span>Alternate WhatsApp <b aria-hidden="true">*</b></span>
-                <input id="alternate-phone" name="alternatePhone" type="tel" inputMode="tel" autoComplete="tel" pattern="(?:\+?91[\s-]?)?[6-9][0-9\s-]{9,13}" title="Enter a valid Indian mobile number, with or without +91." placeholder="10-digit mobile number" required />
-              </label>
-              <label className="registration-field registration-field-wide" htmlFor="leader-email">
-                <span>Group Leader Email <b aria-hidden="true">*</b></span>
-                <input id="leader-email" name="leaderEmail" type="email" autoComplete="email" maxLength={254} placeholder="name@example.com" required />
-              </label>
+              ) : (
+                <>
+                  <label className="registration-field registration-field-wide" htmlFor="group-name">
+                    <span>Group Name <b aria-hidden="true">*</b></span>
+                    <input id="group-name" name="groupName" type="text" maxLength={80} placeholder="Enter your group name" required />
+                  </label>
+                  <div className="registration-participant-fields registration-field-wide">
+                    <div className="registration-participant-heading">
+                      <span>Full names of participants <b aria-hidden="true">*</b></span>
+                      <small>{selectedGroupEvent.min === selectedGroupEvent.max ? `Exactly ${selectedGroupEvent.max} participants` : `${selectedGroupEvent.min}–${selectedGroupEvent.max} participants`}</small>
+                    </div>
+                    {Array.from({ length: selectedGroupEvent.max }, (_, index) => {
+                      const required = index < selectedGroupEvent.min;
+                      return (
+                        <label className="registration-field" htmlFor={`group-participant-${index + 1}`} key={`${groupEventId}-${index}`}>
+                          <span>Participant {index + 1}{required ? <b aria-hidden="true"> *</b> : <small> (optional)</small>}</span>
+                          <input id={`group-participant-${index + 1}`} name={`participant${index + 1}`} type="text" autoComplete="name" maxLength={100} placeholder={`Name as it should appear on the certificate`} required={required} />
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <label className="registration-field" htmlFor="leader-phone">
+                    <span>Group Leader WhatsApp <b aria-hidden="true">*</b></span>
+                    <input id="leader-phone" name="leaderPhone" type="tel" inputMode="tel" autoComplete="tel" pattern="(?:\+?91[\s-]?)?[6-9][0-9\s-]{9,13}" title="Enter a valid Indian mobile number, with or without +91." placeholder="10-digit mobile number" required />
+                  </label>
+                  <label className="registration-field" htmlFor="alternate-phone">
+                    <span>Alternate WhatsApp <b aria-hidden="true">*</b></span>
+                    <input id="alternate-phone" name="alternatePhone" type="tel" inputMode="tel" autoComplete="tel" pattern="(?:\+?91[\s-]?)?[6-9][0-9\s-]{9,13}" title="Enter a valid Indian mobile number, with or without +91." placeholder="10-digit mobile number" required />
+                  </label>
+                  <label className="registration-field registration-field-wide" htmlFor="leader-email">
+                    <span>Group Leader Email <b aria-hidden="true">*</b></span>
+                    <input id="leader-email" name="leaderEmail" type="email" autoComplete="email" maxLength={254} placeholder="name@example.com" required />
+                  </label>
+                </>
+              )}
             </div>
           </section>
         ) : (
@@ -192,10 +241,28 @@ export function RegistrationForm() {
       </label>
 
       <div className="registration-submit-row">
-        <p className="registration-required-note"><b aria-hidden="true">*</b> Required fields</p>
-        <button className="registration-submit" type="submit" disabled={status === "submitting"}>
-          {status === "submitting" ? "Sending registration…" : "Submit registration"}<span aria-hidden="true">↗</span>
-        </button>
+        {isExternalGroupEvent ? (
+          <>
+            <p className="registration-required-note">
+              Registration for Orbital Expo is collected on Google Forms.
+            </p>
+            <a
+              className="registration-submit"
+              href={externalFormUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open Google Form <span aria-hidden="true">↗</span>
+            </a>
+          </>
+        ) : (
+          <>
+            <p className="registration-required-note"><b aria-hidden="true">*</b> Required fields</p>
+            <button className="registration-submit" type="submit" disabled={status === "submitting"}>
+              {status === "submitting" ? "Sending registration…" : "Submit registration"}<span aria-hidden="true">↗</span>
+            </button>
+          </>
+        )}
       </div>
       <p
         id="registration-submit-status"

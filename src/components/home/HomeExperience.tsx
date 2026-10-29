@@ -14,16 +14,19 @@ const TechnotsavGuide = dynamic(
 );
 const HOME_VIDEO_POSITION_KEY = "technotsav-home-solar-position";
 
-function isFullyBuffered(video: HTMLVideoElement) {
+function isSufficientlyBuffered(video: HTMLVideoElement) {
+  if (video.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) return true;
   for (let index = 0; index < video.buffered.length; index += 1) {
-    if (video.buffered.start(index) < 0.1 && video.buffered.end(index) >= video.duration - 0.1) return true;
+    if (video.buffered.start(index) < 0.2 && (video.buffered.end(index) >= Math.min(video.duration, 3.5) || (video.duration > 0 && video.buffered.end(index) / video.duration >= 0.35))) {
+      return true;
+    }
   }
   return false;
 }
 
-function waitForFullBuffer(video: HTMLVideoElement, timeout: number, signal: AbortSignal, onProgress: (value: number) => void) {
+function waitForBuffer(video: HTMLVideoElement, timeout: number, signal: AbortSignal, onProgress: (value: number) => void) {
   return new Promise<boolean>((resolve) => {
-    if (isFullyBuffered(video)) { onProgress(1); resolve(true); return; }
+    if (isSufficientlyBuffered(video)) { onProgress(1); resolve(true); return; }
     let done = false;
     const timer = window.setTimeout(() => finish(false), timeout);
     const cleanup = () => {
@@ -43,9 +46,10 @@ function waitForFullBuffer(video: HTMLVideoElement, timeout: number, signal: Abo
       if (video.duration > 0 && Number.isFinite(video.duration)) {
         let end = 0;
         for (let index = 0; index < video.buffered.length; index += 1) end = Math.max(end, video.buffered.end(index));
-        onProgress(Math.min(1, end / video.duration));
+        const target = Math.min(video.duration, 5);
+        onProgress(Math.min(1, end / (target || 1)));
       }
-      if (isFullyBuffered(video)) finish(true);
+      if (isSufficientlyBuffered(video)) finish(true);
     };
     const aborted = () => finish(false);
     video.addEventListener("progress", check);
@@ -60,7 +64,7 @@ const retainedPreloads = new Map<string, HTMLVideoElement>();
 
 function preloadVideo(url: string, signal: AbortSignal) {
   const retained = retainedPreloads.get(url);
-  if (retained && isFullyBuffered(retained)) return Promise.resolve(true);
+  if (retained && isSufficientlyBuffered(retained)) return Promise.resolve(true);
 
   const video = document.createElement("video");
   video.muted = true;
@@ -92,7 +96,7 @@ function preloadVideo(url: string, signal: AbortSignal) {
       }
       resolve(complete);
     };
-    const check = () => { if (isFullyBuffered(video)) finish(true); };
+    const check = () => { if (isSufficientlyBuffered(video)) finish(true); };
     const failed = () => finish(false);
     const aborted = () => finish(false);
     video.addEventListener("progress", check);
@@ -233,29 +237,27 @@ export function HomeExperience() {
     let spaceProgress = 0;
     let solarProgress = 0;
     const update = window.setInterval(() => {
-      const elapsed = Math.min(1, (performance.now() - startedAt) / 5000);
+      const elapsed = Math.min(1, (performance.now() - startedAt) / 3600);
       const combinedProgress = (spaceProgress + solarProgress) / 2;
-      setProgress(Math.min(99, Math.floor(combinedProgress * 89 + elapsed * 10)));
-    }, 80);
+      setProgress(Math.min(99, Math.floor(combinedProgress * 85 + elapsed * 15)));
+    }, 60);
     const spaceElement = spaceVideo.current;
     const spacePreload = async () => {
       if (spaceElement) {
-        await waitForFullBuffer(spaceElement, 12_000, controller.signal, (value) => { spaceProgress = value; });
+        await waitForBuffer(spaceElement, 8_000, controller.signal, (value) => { spaceProgress = value; });
       }
-      // The loader has a fail-safe and must not start a second full fetch just
-      // because native media buffering did not finish within the wait window.
       spaceProgress = 1;
     };
     const solarController = new AbortController();
     const abortSolarPreload = () => solarController.abort();
     controller.signal.addEventListener("abort", abortSolarPreload, { once: true });
-    const solarFailSafe = window.setTimeout(abortSolarPreload, 15_000);
+    const solarFailSafe = window.setTimeout(abortSolarPreload, 10_000);
     const solarPreload = (async () => {
       const solarVideo = solarSystemVideo.current;
       if (solarVideo) {
         solarVideo.preload = "auto";
         if (solarVideo.networkState === HTMLMediaElement.NETWORK_EMPTY) solarVideo.load();
-        await waitForFullBuffer(solarVideo, 15_000, solarController.signal, (value) => { solarProgress = value; });
+        await waitForBuffer(solarVideo, 10_000, solarController.signal, (value) => { solarProgress = value; });
       }
       solarProgress = 1;
     })()
@@ -264,12 +266,12 @@ export function HomeExperience() {
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (spaceElement && !prefersReducedMotion) void spaceElement.play().catch(() => undefined);
     void Promise.all([spacePreload(), solarPreload]).then(() => {
-      const remainingMs = Math.max(0, 5000 - (performance.now() - startedAt));
+      const remainingMs = Math.max(0, 3200 - (performance.now() - startedAt));
       exitTimer = window.setTimeout(() => {
         if (cancelled) return;
         setProgress(100);
         setIntroLeaving(true);
-        window.setTimeout(() => setIntroVisible(false), 850);
+        window.setTimeout(() => setIntroVisible(false), 750);
       }, remainingMs);
     });
     failSafe = window.setTimeout(() => {
@@ -333,7 +335,7 @@ export function HomeExperience() {
         </div>
         <section className="home-event-lineup" aria-labelledby="event-lineup-title" data-reveal>
           <div className="home-event-heading">
-            <div><p className="home-eyebrow">2026–27 event lineup</p><h3 id="event-lineup-title">Eight ways to join the orbit.</h3><p className="home-event-departments">Presented by {FESTIVAL_DETAILS.departments}</p></div>
+            <div><p className="home-eyebrow">2026–27 event lineup</p><h3 id="event-lineup-title">Nine ways to join the orbit.</h3><p className="home-event-departments">Presented by {FESTIVAL_DETAILS.departments}</p></div>
             <p className="home-event-date">{FESTIVAL_DETAILS.date}</p>
           </div>
           <div className="home-event-grid">

@@ -74,6 +74,8 @@ html:has(.registration-page),body:has(.registration-page){height:auto;min-height
 .registration-type-option>span:last-child{display:grid;gap:3px}
 .registration-type-option strong{color:#fff;font-size:13px}
 .registration-type-option small{color:rgba(223,231,242,.58);font-size:10px}
+.registration-conditional{animation:registration-mode-fade .28s cubic-bezier(.16,1,.3,1) both;will-change:opacity,transform}
+@keyframes registration-mode-fade{from{opacity:0;transform:translate3d(0,8px,0)}to{opacity:1;transform:none}}
 .registration-mode-section{margin-top:26px;padding-top:22px;border-top:1px solid rgba(224,235,250,.14)}
 .registration-section-heading{display:flex;align-items:center;gap:10px;margin-bottom:17px}
 .registration-section-heading>span{color:#f2c86f;font-size:9px;font-weight:700;letter-spacing:.15em}
@@ -81,9 +83,23 @@ html:has(.registration-page),body:has(.registration-page){height:auto;min-height
 .registration-participant-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px;padding:16px;border:1px solid rgba(196,216,242,.15);border-radius:16px;background:rgba(3,8,16,.3)}
 .registration-participant-heading{grid-column:1/-1;display:flex;align-items:baseline;justify-content:space-between;gap:12px;color:rgba(244,247,253,.9);font-size:12px;font-weight:600}
 .registration-participant-heading small{color:rgba(242,200,111,.82);font-size:10px;font-weight:500;text-align:right}
+.registration-external-card{display:flex;flex-direction:column;gap:16px;padding:clamp(18px,2.8vw,28px);border:1px solid rgba(242,200,111,.38);border-radius:18px;background:linear-gradient(135deg,rgba(14,28,48,.72),rgba(7,12,22,.84));box-shadow:0 18px 50px rgba(0,0,0,.36),inset 0 1px rgba(255,255,255,.09);text-align:left}
+.registration-external-badge{display:inline-flex;align-items:center;gap:7px;width:fit-content;padding:5px 12px;border:1px solid rgba(242,200,111,.45);border-radius:999px;background:rgba(242,200,111,.1);color:#f2c86f;font-size:9px;font-weight:700;letter-spacing:.15em;text-transform:uppercase}
+.registration-external-card h3{margin:0;color:#fff;font-family:var(--font-display,Georgia,serif);font-size:clamp(20px,2.6vw,27px);font-weight:400;line-height:1.2;letter-spacing:-.02em}
+.registration-external-intro{margin:0;color:rgba(233,240,250,.78);font-size:13px;line-height:1.6}
+.registration-external-intro strong{color:#fff}
+.registration-external-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:14px 16px;border:1px solid rgba(196,216,242,.15);border-radius:14px;background:rgba(4,9,18,.5)}
+.registration-external-metric{display:flex;flex-direction:column;gap:3px}
+.metric-label{color:#f2c86f;font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.metric-value{color:#fff;font-size:13px;font-weight:500}
+.registration-external-cta-box{display:flex;flex-direction:column;gap:9px;padding-top:4px}
+.registration-google-form-btn{display:inline-flex;min-height:48px;align-items:center;justify-content:center;gap:12px;width:fit-content;padding:0 22px;border:1px solid rgba(242,200,111,.65);border-radius:999px;background:linear-gradient(110deg,rgba(26,62,102,.95),rgba(62,39,32,.95));color:#fff;font:600 12px/1 var(--font-body,Arial,sans-serif);letter-spacing:.04em;text-decoration:none;box-shadow:0 10px 30px rgba(0,0,0,.3),inset 0 1px rgba(255,255,255,.14);transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}
+.registration-google-form-btn:hover{transform:translateY(-2px);border-color:#f2c86f;box-shadow:0 14px 34px rgba(0,0,0,.38),0 0 22px rgba(242,200,111,.2)}
+.registration-google-form-btn span:last-child{color:#f2c86f;font-size:16px}
+.registration-external-help{margin:0;color:rgba(223,231,242,.55);font-size:11px;line-height:1.5}
 .registration-submit-row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:24px}
 .registration-required-note{margin:0;color:rgba(223,231,242,.55);font-size:10px}
-.registration-submit{display:inline-flex;min-height:48px;align-items:center;justify-content:center;gap:24px;padding:0 18px;border:1px solid rgba(242,200,111,.52);border-radius:999px;background:linear-gradient(110deg,rgba(19,42,68,.92),rgba(44,28,23,.92));color:#fff;font:600 12px/1 var(--font-body,Arial,sans-serif);letter-spacing:.035em;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.2),inset 0 1px rgba(255,255,255,.1);transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}
+.registration-submit{display:inline-flex;min-height:48px;align-items:center;justify-content:center;gap:24px;padding:0 18px;border:1px solid rgba(242,200,111,.52);border-radius:999px;background:linear-gradient(110deg,rgba(19,42,68,.92),rgba(44,28,23,.92));color:#fff;font:600 12px/1 var(--font-body,Arial,sans-serif);letter-spacing:.035em;text-decoration:none;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.2),inset 0 1px rgba(255,255,255,.1);transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}
 .registration-submit span{color:#f2c86f;font-size:17px}.registration-submit:hover:not(:disabled){transform:translateY(-2px);border-color:#f2c86f;box-shadow:0 12px 30px rgba(0,0,0,.3),0 0 22px rgba(242,200,111,.13)}.registration-submit:disabled{cursor:wait;opacity:.65}.registration-submit:focus-visible{outline:2px solid #fff;outline-offset:4px}
 .registration-submit-status{min-height:20px;margin:12px 0 0;color:rgba(223,231,242,.7);font-size:12px;line-height:1.5}.registration-submit-status.is-success,.registration-submit-status.is-error{display:flex;align-items:flex-start;gap:9px;padding:12px 14px;border:1px solid transparent;border-radius:14px}.registration-submit-status.is-success{color:#b9f6d8;background:rgba(55,177,121,.12);border-color:rgba(113,232,173,.32)}.registration-submit-status.is-success span{flex:none;font-size:15px;font-weight:800}.registration-submit-status.is-error{color:#ffb1a4;background:rgba(199,70,70,.1);border-color:rgba(255,145,129,.3)}
 .registration-success-dialog{width:min(440px,calc(100vw - 32px));max-width:none;margin:auto;padding:34px 30px 28px;border:1px solid rgba(242,200,111,.38);border-radius:24px;background:radial-gradient(ellipse at top,rgba(32,74,111,.58),transparent 68%),linear-gradient(145deg,#101a29,#090d15 72%);color:#f4f7fd;text-align:center;box-shadow:0 30px 100px rgba(0,0,0,.55),inset 0 1px rgba(255,255,255,.1)}.registration-success-dialog::backdrop{background:rgba(1,5,12,.76);backdrop-filter:blur(8px)}.registration-success-icon{display:grid;width:58px;height:58px;place-items:center;margin:0 auto 18px;border:1px solid rgba(130,239,183,.48);border-radius:50%;background:rgba(55,177,121,.15);color:#a8edcf;font-size:28px}.registration-success-eyebrow{margin:0 0 10px;color:#f2c86f;font-size:9px;font-weight:700;letter-spacing:.2em}.registration-success-dialog h3{margin:0;font-family:var(--font-display,Georgia,serif);font-size:clamp(28px,7vw,38px);font-weight:400;line-height:1.1}.registration-success-dialog>p:not(.registration-success-eyebrow){margin:14px 0 24px;color:rgba(232,238,249,.76);font-size:14px;line-height:1.6}.registration-success-dialog button{min-height:44px;padding:0 25px;border:1px solid rgba(242,200,111,.55);border-radius:999px;background:linear-gradient(110deg,rgba(19,42,68,.96),rgba(44,28,23,.96));color:#fff;font:600 12px/1 var(--font-body,Arial,sans-serif);letter-spacing:.05em;cursor:pointer}.registration-success-dialog button:hover{border-color:#f2c86f}.registration-success-dialog button:focus-visible{outline:2px solid #fff;outline-offset:4px}
@@ -117,6 +133,8 @@ html:has(.registration-page),body:has(.registration-page){height:auto;min-height
   .registration-participant-fields{grid-template-columns:minmax(0,1fr);gap:12px;padding:12px}
   .registration-participant-heading{align-items:flex-start;flex-direction:column;gap:4px}
   .registration-participant-heading small{text-align:left}
+  .registration-external-metrics{grid-template-columns:1fr;gap:10px;padding:12px 14px}
+  .registration-google-form-btn{width:100%}
   .registration-submit-row{align-items:stretch;flex-direction:column-reverse;gap:11px;margin-top:20px}
   .registration-submit{width:100%}
   .registration-required-note{text-align:center}

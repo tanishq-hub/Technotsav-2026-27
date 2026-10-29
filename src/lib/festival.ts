@@ -18,6 +18,7 @@ export const FESTIVAL_EVENTS = [
   { name: "Astro Bots", description: "Navigate and grip your way to victory" },
   { name: "Orbit Hack", description: "Bug Bounty" },
   { name: "Code in Dark", description: "Blind Typing" },
+  { name: "Orbital Expo", description: "Project Exhibition" },
 ] as const;
 
 export const CORE_COMMITTEE = [

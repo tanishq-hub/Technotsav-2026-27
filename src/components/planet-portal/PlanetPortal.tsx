@@ -13,7 +13,7 @@ const ease = (t: number) => t < .5 ? 4 * t ** 3 : 1 - Math.pow(-2 * t + 2, 3) / 
 const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function panelCountFor(planet: PlanetDestination) {
-  return 1 + PLANET_EVENTS[planet].panels.length + (planet === "neptune" ? 1 : 0);
+  return 1 + PLANET_EVENTS[planet].panels.length + (planet === "pluto" ? 1 : 0);
 }
 
 function aboutMotionClass(panelIndex: number, activePanel: number, transition: AboutTransition | null) {
@@ -57,24 +57,6 @@ function ready(media: HTMLMediaElement, timeout = 4500, requiredState: number = 
   });
 }
 
-function playbackEnded(media: HTMLMediaElement, timeout: number, signal?: AbortSignal) {
-  return new Promise<void>((resolve) => {
-    const finish = () => {
-      window.clearTimeout(timer);
-      media.removeEventListener("ended", finish);
-      media.removeEventListener("error", finish);
-      signal?.removeEventListener("abort", finish);
-      resolve();
-    };
-    const timer = window.setTimeout(() => {
-      media.pause();
-      finish();
-    }, timeout);
-    media.addEventListener("ended", finish, { once: true });
-    media.addEventListener("error", finish, { once: true });
-    signal?.addEventListener("abort", finish, { once: true });
-  });
-}
 
 export function PlanetPortal() {
   const root = useRef<HTMLElement>(null);
@@ -145,14 +127,14 @@ export function PlanetPortal() {
         setAboutTransition(null);
         aboutPanelLocked.current = false;
         aboutPanelTimer.current = null;
-      }, reduceMotion() ? 80 : 720);
+      }, reduceMotion() ? 80 : 560);
       return;
     }
 
     const planetPosition = PLANETS.findIndex(({ key }) => key === currentPlanet);
     const adjacent = PLANETS[planetPosition + (direction === "forward" ? 1 : -1)];
     if (!adjacent) return;
-    travelRef.current(adjacent.key, 0);
+    travelRef.current(adjacent.key, direction === "forward" ? 0 : panelCountFor(adjacent.key) - 1);
   }, []);
 
   const commitState = useCallback((next: PlanetDestination, initialPanel = 0) => {
@@ -182,22 +164,36 @@ export function PlanetPortal() {
     if (!shell) return;
     let touchOrigin: { x: number; y: number } | null = null;
     let wheelDelta = 0;
-    let wheelConsumed = false;
     let wheelIdleTimer = 0;
+    let lastTriggerTime = 0;
+
     const ignoredTarget = (target: EventTarget | null) =>
       target instanceof Element && Boolean(target.closest(".planet-list, .site-header, button, a"));
+
     const wheel = (event: WheelEvent) => {
       if (event.ctrlKey || Math.abs(event.deltaY) < Math.abs(event.deltaX) || ignoredTarget(event.target)) return;
       event.preventDefault();
-      window.clearTimeout(wheelIdleTimer);
-      wheelIdleTimer = window.setTimeout(() => { wheelDelta = 0; wheelConsumed = false; }, 220);
-      if (aboutPanelLocked.current || wheelConsumed || Math.abs(event.deltaY) < 1) return;
+
+      const now = performance.now();
+      if (now - lastTriggerTime < 520 || aboutPanelLocked.current) return;
+
       const normalizedDelta = event.deltaY * (event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? window.innerHeight : 1);
+      if (Math.abs(normalizedDelta) < 1) return;
+
+      // Reset accumulator if user reverses scroll direction
+      if ((wheelDelta > 0 && normalizedDelta < 0) || (wheelDelta < 0 && normalizedDelta > 0)) {
+        wheelDelta = 0;
+      }
+
       wheelDelta += normalizedDelta;
-      if (Math.abs(wheelDelta) >= 28) {
+
+      window.clearTimeout(wheelIdleTimer);
+      wheelIdleTimer = window.setTimeout(() => { wheelDelta = 0; }, 140);
+
+      if (Math.abs(wheelDelta) >= 26) {
         const direction = wheelDelta > 0 ? "forward" : "backward";
         wheelDelta = 0;
-        wheelConsumed = true;
+        lastTriggerTime = now;
         movePanel(direction);
       }
     };
@@ -211,10 +207,14 @@ export function PlanetPortal() {
     };
     const touchEnd = (event: TouchEvent) => {
       if (touchOrigin !== null && event.changedTouches.length) {
-        const distanceY = touchOrigin.y - event.changedTouches[0].clientY;
-        const distanceX = touchOrigin.x - event.changedTouches[0].clientX;
-        if (Math.abs(distanceY) > 28 && Math.abs(distanceY) > Math.abs(distanceX) * 1.15) {
-          movePanel(distanceY > 0 ? "forward" : "backward");
+        const now = performance.now();
+        if (now - lastTriggerTime >= 520 && !aboutPanelLocked.current) {
+          const distanceY = touchOrigin.y - event.changedTouches[0].clientY;
+          const distanceX = touchOrigin.x - event.changedTouches[0].clientX;
+          if (Math.abs(distanceY) > 26 && Math.abs(distanceY) > Math.abs(distanceX) * 1.15) {
+            lastTriggerTime = now;
+            movePanel(distanceY > 0 ? "forward" : "backward");
+          }
         }
       }
       touchOrigin = null;
@@ -344,52 +344,33 @@ export function PlanetPortal() {
       activeTransition.current = true;
       expansion.current = 0;
       requestCanvasFrame.current();
-      // Reveal the destination video as a still first frame. Playback begins only
-      // after the portal is mostly open, so the motion feels intentional.
-      await animateValue((v) => { if (!signal.aborted) expansion.current = v * 0.8; }, 850);
-      if (signal.aborted) return;
-      try {
-        await video.play();
-      } catch {
-        if (signal.aborted) return;
-        await showDestinationWithoutTransition();
-        return;
-      }
+
+      // Pre-warm background video in parallel so handoff at the end is instantaneous
+      setBackgroundPlanet(destination);
+
+      // Reveal the destination video as a still first frame. Playback begins near 80% reveal.
+      await animateValue((v) => { if (!signal.aborted) expansion.current = v * 0.8; }, 520);
       if (signal.aborted) return;
 
+      void video.play().catch(() => undefined);
       requestCanvasFrame.current();
-      const ended = playbackEnded(video, Math.min(15000, (video.duration || 8) * 1000 + 1200), signal);
-      const revealTimer = window.setTimeout(revealDestination, 2000);
-      await Promise.all([
-        animateValue((v) => { if (!signal.aborted) expansion.current = 0.8 + v * 0.2; }, 320),
-        ended,
-      ]);
+
+      // Expand the remaining 20% to full screen smoothly
+      await animateValue((v) => { if (!signal.aborted) expansion.current = 0.8 + v * 0.2; }, 260);
       if (signal.aborted) return;
-      window.clearTimeout(revealTimer);
+
       revealDestination();
 
-      const snapshot = frozenCanvas.current?.getContext("2d");
-      if (snapshot && canvas.current && frozenCanvas.current) {
-        snapshot.clearRect(0, 0, frozenCanvas.current.width, frozenCanvas.current.height);
-        snapshot.drawImage(canvas.current, 0, 0, innerWidth, innerHeight);
-        frozen.current = true;
-        requestCanvasFrame.current();
-      }
-      shell.classList.add("is-committing");
-      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-      activeTransition.current = false;
-      expansion.current = 0;
-      requestCanvasFrame.current();
-      shell.classList.remove("is-committing");
-      setBackgroundPlanet(destination);
-      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       const background = backgroundVideo.current;
       if (background) {
-        const backgroundReady = ready(background, 4500, HTMLMediaElement.HAVE_CURRENT_DATA, signal);
+        if (video.currentTime > 0) {
+          try { background.currentTime = video.currentTime; } catch { /* ignore */ }
+        }
         void background.play().catch(() => undefined);
-        await backgroundReady;
+        await ready(background, 2000, HTMLMediaElement.HAVE_CURRENT_DATA, signal);
       }
       if (signal.aborted) return;
+
       shell.classList.remove("is-transitioning", "is-content-visible");
       finishTravel();
     } catch {
@@ -495,14 +476,24 @@ export function PlanetPortal() {
       g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0,.88)");
       context.fillStyle = g; context.fillRect(0, h * .52, w, h * .48);
     };
-    const roundedPoints = (rw: number, rh: number, r: number) => {
-      const points: XY[] = [];
+    const rawPoints: XY[] = Array.from({ length: 44 }, () => ({ x: 0, y: 0 }));
+    const projectedPoints: XY[] = Array.from({ length: 44 }, () => ({ x: 0, y: 0 }));
+    const populateRoundedPoints = (rw: number, rh: number, r: number) => {
+      let idx = 0;
       const arcs: [number, number, number, number][] = [
         [rw / 2 - r, -rh / 2 + r, -Math.PI / 2, 0], [rw / 2 - r, rh / 2 - r, 0, Math.PI / 2],
         [-rw / 2 + r, rh / 2 - r, Math.PI / 2, Math.PI], [-rw / 2 + r, -rh / 2 + r, Math.PI, Math.PI * 1.5],
       ];
-      arcs.forEach(([cx, cy, a, b]) => { for (let i = 0; i <= 10; i++) { const t = a + (b - a) * i / 10; points.push({ x: cx + Math.cos(t) * r, y: cy + Math.sin(t) * r }); } });
-      return points;
+      for (let a = 0; a < 4; a++) {
+        const [cx, cy, a0, a1] = arcs[a];
+        for (let i = 0; i <= 10; i++) {
+          const t = a0 + ((a1 - a0) * i) / 10;
+          rawPoints[idx].x = cx + Math.cos(t) * r;
+          rawPoints[idx].y = cy + Math.sin(t) * r;
+          idx++;
+        }
+      }
+      return rawPoints;
     };
     const draw = (now: number) => {
       raf = 0;
@@ -516,28 +507,47 @@ export function PlanetPortal() {
       if (frozen.current) { ctx.drawImage(behind, 0, 0, w, h); shade(ctx); }
       const e = expansion.current;
       if (activeTransition.current) {
-        const startWidth = w <= 640 ? Math.min(260, w * .66) : w <= 900 ? Math.min(300, w * .48) : Math.min(320, w * .31);
-        const startHeight = startWidth * (350 / 320);
-        const startCenterY = h * (w <= 640 ? .44 : w <= 900 ? .43 : .5) - startHeight * .04;
-        const cx = w / 2, cy = startCenterY + (h / 2 - startCenterY) * e;
-        const rw = startWidth + (w - startWidth) * e;
-        const rh = startHeight + (h - startHeight) * e;
-        const radius = Math.min(rw, rh) / 2 * (1 - e);
-        const rx = reduceMotion() ? 0 : tilt.current.x * (1 - e);
-        const ry = reduceMotion() ? 0 : tilt.current.y * (1 - e);
-        if (rw > 1 && rh > 1) {
-          const ax = rx * Math.PI / 180, ay = ry * Math.PI / 180;
-          const points = roundedPoints(rw, rh, radius).map(({ x, y }) => {
-            const xx = x * Math.cos(ay), yy = y * Math.cos(ax);
-            const p = 850 / (850 + x * Math.sin(ay) - y * Math.sin(ax));
-            return { x: cx + xx * p, y: cy + yy * p };
-          });
-          ctx.save(); ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
-          points.slice(1).forEach((p) => ctx.lineTo(p.x, p.y)); ctx.closePath(); ctx.clip();
-          ctx.fillStyle = "#030303"; ctx.fillRect(0, 0, w, h);
+        if (e >= 0.99) {
+          ctx.fillStyle = "#030303";
+          ctx.fillRect(0, 0, w, h);
           drawCover(ctx, transitionVideo.current);
           shade(ctx);
-          ctx.restore();
+        } else {
+          const startWidth = w <= 640 ? Math.min(260, w * .66) : w <= 900 ? Math.min(300, w * .48) : Math.min(320, w * .31);
+          const startHeight = startWidth * (350 / 320);
+          const startCenterY = h * (w <= 640 ? .44 : w <= 900 ? .43 : .5) - startHeight * .04;
+          const cx = w / 2, cy = startCenterY + (h / 2 - startCenterY) * e;
+          const rw = startWidth + (w - startWidth) * e;
+          const rh = startHeight + (h - startHeight) * e;
+          const radius = Math.min(rw, rh) / 2 * (1 - e);
+          const rx = reduceMotion() ? 0 : tilt.current.x * (1 - e);
+          const ry = reduceMotion() ? 0 : tilt.current.y * (1 - e);
+          if (rw > 1 && rh > 1) {
+            const ax = rx * Math.PI / 180, ay = ry * Math.PI / 180;
+            const cosX = Math.cos(ax), sinX = Math.sin(ax);
+            const cosY = Math.cos(ay), sinY = Math.sin(ay);
+            populateRoundedPoints(rw, rh, radius);
+            for (let i = 0; i < 44; i++) {
+              const pt = rawPoints[i];
+              const xx = pt.x * cosY, yy = pt.y * cosX;
+              const p = 850 / (850 + pt.x * sinY - pt.y * sinX);
+              projectedPoints[i].x = cx + xx * p;
+              projectedPoints[i].y = cy + yy * p;
+            }
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(projectedPoints[0].x, projectedPoints[0].y);
+            for (let i = 1; i < 44; i++) {
+              ctx.lineTo(projectedPoints[i].x, projectedPoints[i].y);
+            }
+            ctx.closePath();
+            ctx.clip();
+            ctx.fillStyle = "#030303";
+            ctx.fillRect(0, 0, w, h);
+            drawCover(ctx, transitionVideo.current);
+            shade(ctx);
+            ctx.restore();
+          }
         }
       }
       if (activeTransition.current) schedule();
@@ -589,8 +599,8 @@ export function PlanetPortal() {
 
   const event = PLANET_EVENTS[planet];
   const eventEndPanel = event.panels.length + 1;
-  const footerPanel = planet === "neptune" ? eventEndPanel : -1;
-  const atJourneyEnd = planet === "neptune" && aboutPanel === footerPanel;
+  const footerPanel = planet === "pluto" ? eventEndPanel : -1;
+  const atJourneyEnd = planet === "pluto" && aboutPanel === footerPanel;
   const planetIndex = PLANETS.findIndex(({ key }) => key === planet);
   const nextPlanet = PLANETS[planetIndex + 1];
   return (
@@ -653,8 +663,7 @@ export function PlanetPortal() {
         </div>
         <dl className="event-overview-details">
           <div className="fact"><dt>Date</dt><dd>Friday, 27 November 2026</dd></div>
-          <div className="fact"><dt>Time</dt><dd>To be announced</dd></div>
-          <div className="fact"><dt>Venue</dt><dd>Event lab · details to be announced</dd></div>
+          <div className="fact"><dt>Time</dt><dd>10 am onwards</dd></div>
           <div className="fact"><dt>Rounds</dt><dd>{event.rounds}</dd></div>
         </dl>
       </section>
@@ -687,11 +696,11 @@ export function PlanetPortal() {
           </section>
         );
       })}
-      {planet === "neptune" && (
+      {planet === "pluto" && (
         <section
           className={"neptune-end-panel chrome " + aboutMotionClass(footerPanel, aboutPanel, aboutTransition)}
           role="region"
-          aria-label="Technotsav contact information. Scroll up to revisit Neptune."
+          aria-label="Technotsav contact information. Scroll up to revisit Pluto."
           aria-hidden={!atJourneyEnd}
           tabIndex={atJourneyEnd ? 0 : -1}
           onKeyDown={(event) => {
@@ -708,7 +717,19 @@ export function PlanetPortal() {
         </section>
       )}
       <div className="scroll-cue" aria-hidden="true">
-        <span>{String(aboutPanel + 1).padStart(2, "0")} / {String(panelCountFor(planet)).padStart(2, "0")} &nbsp;·&nbsp; {atJourneyEnd ? "END OF JOURNEY · SCROLL UP TO REVISIT" : planet === "neptune" && aboutPanel === eventEndPanel - 1 ? "SCROLL FOR FESTIVAL CONTACTS" : aboutPanel > 0 ? "SCROLL TO CONTINUE EVENT DETAILS" : nextPlanet ? "SCROLL TO " + nextPlanet.name.toUpperCase() : "END OF JOURNEY"}</span><i />
+        <span>
+          {String(aboutPanel + 1).padStart(2, "0")} / {String(panelCountFor(planet)).padStart(2, "0")} &nbsp;·&nbsp;{" "}
+          {atJourneyEnd
+            ? "END OF JOURNEY · SCROLL UP TO REVISIT"
+            : planet === "pluto" && aboutPanel === eventEndPanel - 1
+            ? "SCROLL FOR FESTIVAL CONTACTS"
+            : aboutPanel < eventEndPanel - 1
+            ? "SCROLL TO CONTINUE EVENT DETAILS"
+            : nextPlanet
+            ? "SCROLL TO " + nextPlanet.name.toUpperCase()
+            : "END OF JOURNEY"}
+        </span>
+        <i />
       </div>
       <div className="transition-layer" aria-hidden="true"><video ref={transitionVideo} muted playsInline preload="auto" /></div>
       <div className="loading" aria-live="polite">Preparing orbit…</div>
