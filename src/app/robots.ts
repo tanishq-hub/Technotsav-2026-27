@@ -10,3 +10,4 @@ export default function robots(): MetadataRoute.Robots {
     sitemap: "https://technotsav26-27.vercel.app/sitemap.xml",
   };
 }
+
