@@ -50,9 +50,11 @@ export function CustomCursor() {
       document.documentElement.dataset.customCursor = "active";
       targetX = event.clientX;
       targetY = event.clientY;
+      const isInput = Boolean((event.target as Element | null)?.closest?.("input, select, textarea"));
       node.classList.add("is-visible");
-      node.classList.toggle("is-enter", Boolean(
-        (event.target as Element | null)?.closest?.("a, button, [role='button'], input, select, textarea, [tabindex]:not([tabindex='-1'])"),
+      node.classList.toggle("is-input", isInput);
+      node.classList.toggle("is-enter", !isInput && Boolean(
+        (event.target as Element | null)?.closest?.("a, button, [role='button'], [tabindex]:not([tabindex='-1'])"),
       ));
       node.classList.toggle("is-pressing", event.buttons > 0);
       if (reducedMotion.matches) {

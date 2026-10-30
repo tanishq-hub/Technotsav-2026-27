@@ -19,8 +19,8 @@ export const GUIDE_INTENTS: GuideIntent[] = [
     followUps: ["What is Technotsav?", "When is the festival?", "Tell me about NMFC"],
   },
   {
-    phrases: ["registration", "register", "sign up", "registration form", "how can i join"],
-    response: "Registration details and form fields haven’t been confirmed yet. Check back here after the organizers share the registration information.",
+    phrases: ["registration", "register", "sign up", "registration form", "how can i join", "how to register"],
+    response: "Registration is open! You can submit registrations directly on the Registration page for Individual and Group events. Registrations for Orbital Expo are accepted via its designated Google Form.",
     followUps: ["What activities are listed?", "When is the festival?", "What is Technotsav?"],
   },
   {

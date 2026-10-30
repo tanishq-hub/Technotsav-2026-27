@@ -17,9 +17,11 @@
 .site-header[data-active-tab="events"] .site-brand-theme,.site-header[data-active-tab="registration"] .site-brand-theme{clip-path:inset(0 0 0 0)}
 .site-header .menu{min-height:42px;padding:0 16px;border:1px solid rgba(232,244,255,.23);border-radius:999px;background:rgba(5,12,25,.52);color:#fff;font-size:11px;backdrop-filter:blur(12px)}
 .site-header .mobile-destinations{position:absolute;top:calc(100% + 10px);right:0;width:min(330px,calc(100vw - 36px));max-height:min(62vh,520px);overflow:auto;padding:17px;border:1px solid rgba(177,207,255,.25);border-radius:18px;background:linear-gradient(145deg,rgba(9,17,34,.96),rgba(4,7,16,.94));box-shadow:0 20px 64px rgba(0,0,0,.48);backdrop-filter:blur(22px)}
-.custom-cursor{display:none;position:fixed;left:0;top:0;z-index:2147483647;width:1px;height:1px;pointer-events:none;opacity:0;contain:layout style;will-change:transform;transition:opacity .2s ease}.custom-cursor.is-visible{opacity:1}.cursor-dot,.cursor-orbit{position:absolute;left:0;top:0;border-radius:50%;transform:translate(-50%,-50%)}.cursor-dot{width:12px;height:12px;background:#fff}.cursor-orbit{width:36px;height:36px;border:1px solid #fff;background:rgba(255,255,255,.4);transition:transform .3s cubic-bezier(.22,1,.36,1)}.custom-cursor.is-enter .cursor-orbit{transform:translate(-50%,-50%) scale(1.16)}.custom-cursor.is-pressing .cursor-orbit{transform:translate(-50%,-50%) scale(.86);border-color:#ffd27d;background:rgba(255,154,85,.16)}.cursor-label{position:absolute;top:26px;left:0;transform:translateX(-50%) translateY(-4px);font:16px/1.2 var(--font-body,Arial,sans-serif);white-space:nowrap;opacity:0;transition:opacity .2s ease,transform .3s cubic-bezier(.22,1,.36,1)}.custom-cursor.is-enter .cursor-label{opacity:1;transform:translateX(-50%) translateY(0)}
+.custom-cursor{display:none;position:fixed;left:0;top:0;z-index:2147483647;width:1px;height:1px;pointer-events:none;opacity:0;contain:layout style;will-change:transform;transition:opacity .2s ease}.custom-cursor.is-visible{opacity:1}.custom-cursor.is-input{opacity:0!important}
 @media(hover:hover) and (pointer:fine){.custom-cursor{display:block}}
 html[data-custom-cursor="active"],html[data-custom-cursor="active"] body,html[data-custom-cursor="active"] body *{cursor:none!important}
+html[data-custom-cursor="active"] input,html[data-custom-cursor="active"] textarea{cursor:text!important}
+html[data-custom-cursor="active"] select{cursor:pointer!important}
 /* High-contrast cursor marker, shared by every route and hidden only during the Home intro. */
 .cursor-dot{width:10px;height:10px;border:1px solid rgba(255,255,255,.98);background:#ff9a55;box-shadow:0 0 10px rgba(255,124,59,.95),0 0 22px rgba(113,188,255,.58)}
 .cursor-orbit{width:38px;height:38px;border:1.5px solid rgba(190,225,255,.98);background:radial-gradient(circle,rgba(255,255,255,.16),rgba(60,133,211,.12) 65%,transparent 70%);box-shadow:0 0 16px rgba(75,153,233,.48),inset 0 0 12px rgba(255,255,255,.13)}
@@ -71,23 +73,26 @@ html:has(.home-intro) .custom-cursor{opacity:0!important}
   .site-header[data-home-docked="true"] .site-countdown-unit small{font-size:6px;letter-spacing:.1em}
   .site-header[data-home-docked="true"] .site-countdown-separator{font-size:10px}
   .site-header[data-home-docked="true"] .site-countdown-zone{font-size:7px}
-  .site-header[data-home-docked="true"] .site-header-controls{grid-column:1;grid-row:3;display:flex;width:min(100%,350px);min-height:42px;justify-self:center;align-items:center;justify-content:center;gap:8px}
-  .site-header[data-home-docked="true"] .site-nav{display:flex;width:100%;min-width:0;justify-content:space-around;gap:clamp(8px,2vw,14px);padding:9px 12px}
-  .site-header[data-home-docked="true"] .site-nav a{font-size:clamp(9px,2.6vw,11px);letter-spacing:.035em}
-  .site-header[data-home-docked="true"] .menu{min-height:40px;padding:0 12px;font-size:10px}
+  .site-header[data-home-docked="true"] .site-header-controls{grid-column:1;grid-row:3;display:flex;width:100%;max-width:min(440px,calc(100vw - 20px));min-height:38px;justify-self:center;align-items:center;justify-content:center;gap:6px}
+  .site-header[data-home-docked="true"] .site-nav{display:flex;flex:1 1 auto;min-width:0;justify-content:space-evenly;gap:clamp(4px,1.5vw,10px);padding:6px 10px}
+  .site-header[data-home-docked="true"] .site-nav a{padding:4px 6px;font-size:clamp(9px,2.4vw,11px);letter-spacing:.02em;white-space:nowrap}
+  .site-header[data-home-docked="true"] .menu{flex:0 0 auto;min-height:36px;height:36px;padding:0 10px;font-size:10px;white-space:nowrap}
   .site-header[data-home-docked="false"] .site-brand{width:clamp(210px,72vw,300px);height:245px}
   .site-header[data-home-docked="false"] .site-brand-edition{width:105px}
   .site-header[data-home-docked="false"] .site-brand-wordmark{top:103px}
   .site-header[data-home-docked="false"] .site-brand-theme{top:163px}
 }
 @media(max-width:375px){
-  .site-header-inner{padding-inline:11px}
-  .site-header[data-home-docked="true"] .site-brand{--brand-width:clamp(124px,35vw,132px);--edition-width:clamp(44px,12vw,48px)}
-  .site-header[data-home-docked="true"] .site-countdown{gap:6px;padding-inline:10px}
-  .site-header[data-home-docked="true"] .site-header-controls{width:100%;gap:6px}
-  .site-header[data-home-docked="true"] .site-nav{gap:6px;padding-inline:9px}
-  .site-header[data-home-docked="true"] .site-nav a{font-size:9px;letter-spacing:.02em}
-  .site-header[data-home-docked="true"] .menu{padding-inline:10px;font-size:9px}
+  .site-header-inner{padding-inline:6px}
+  .site-header[data-home-docked="true"] .site-brand{--brand-width:clamp(116px,33vw,126px);--edition-width:clamp(38px,10vw,44px)}
+  .site-header[data-home-docked="true"] .site-countdown{gap:4px;padding-inline:7px;padding-block:5px}
+  .site-header[data-home-docked="true"] .site-countdown-unit{min-width:20px}
+  .site-header[data-home-docked="true"] .site-countdown-unit strong{font-size:10px}
+  .site-header[data-home-docked="true"] .site-header-controls{width:100%;max-width:100%;gap:4px}
+  .site-header[data-home-docked="true"] .site-nav{gap:4px;padding:5px 7px}
+  .site-header[data-home-docked="true"] .site-nav a{padding:3px 5px;font-size:8.5px;letter-spacing:.01em}
+  .site-header[data-home-docked="true"] .menu{min-height:34px;height:34px;padding:0 8px;font-size:8.5px}
+  .site-header[data-home-docked="true"] .menu::after{margin-left:5px}
 }
 @media(max-width:640px) and (max-height:560px){
   .site-header{height:130px}

@@ -7,9 +7,44 @@ type ServiceAccount = { client_email?: string; private_key?: string; token_uri?:
 type SheetField = "timestamp" | "collegeName" | "classRepName" | "classRepPhone" | "registrationType" | "eventName" | "groupName" | "participants" | "participantName" | "leaderPhone" | "alternatePhone" | "leaderEmail" | "participantPhone";
 
 let cachedAccessToken: { token: string; expiresAt: number } | undefined;
+let ongoingTokenFetch: Promise<string> | null = null;
+
+// Rate limiting: max 10 submissions per minute per client IP
+const ipRateLimits = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const MAX_REQUESTS_PER_WINDOW = 10;
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const record = ipRateLimits.get(ip);
+  if (!record || now > record.resetTime) {
+    ipRateLimits.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    if (ipRateLimits.size > 500) {
+      for (const [key, value] of ipRateLimits.entries()) {
+        if (now > value.resetTime) ipRateLimits.delete(key);
+      }
+    }
+    return false;
+  }
+  if (record.count >= MAX_REQUESTS_PER_WINDOW) return true;
+  record.count += 1;
+  return false;
+}
+
 const text = (value: unknown) => typeof value === "string" ? value.trim() : "";
-const validPhone = (value: string) => /^[6-9]\d{9}$/.test(value.replace(/^(?:\+?91)[\s-]?/, "").replace(/[\s-]/g, ""));
+// Supports standard Indian mobile numbers with optional +91, 91, or leading 0 trunk prefix
+const validPhone = (value: string) => /^[6-9]\d{9}$/.test(value.replace(/^(?:\+?91|0)[\s-]*/, "").replace(/[\s-]/g, ""));
 const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+// Protect against spreadsheet formula injection (leading =, +, -, @, \t, \r)
+function sanitizeForSheet(value: string): string {
+  if (!value) return "";
+  const trimmed = value.trim();
+  if (/^[=+\-@\t\r]/.test(trimmed)) {
+    return `'${trimmed}`;
+  }
+  return trimmed;
+}
 
 function badRequest(message: string) {
   return NextResponse.json({ message }, { status: 400 });
@@ -65,44 +100,53 @@ function requiredSheetFields(type: "group" | "individual"): SheetField[] {
 
 async function getAccessToken() {
   if (cachedAccessToken && cachedAccessToken.expiresAt > Date.now() + 60_000) return cachedAccessToken.token;
+  if (ongoingTokenFetch) return ongoingTokenFetch;
 
-  const rawAccount = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-  if (!rawAccount) throw new Error("Missing Google service account credentials");
+  ongoingTokenFetch = (async () => {
+    try {
+      const rawAccount = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+      if (!rawAccount) throw new Error("Missing Google service account credentials");
 
-  let account: ServiceAccount;
-  try {
-    account = JSON.parse(rawAccount) as ServiceAccount;
-  } catch {
-    throw new Error("Google service account credentials are not valid JSON");
-  }
-  if (!account.client_email || !account.private_key) throw new Error("Google service account credentials are incomplete");
+      let account: ServiceAccount;
+      try {
+        account = JSON.parse(rawAccount) as ServiceAccount;
+      } catch {
+        throw new Error("Google service account credentials are not valid JSON");
+      }
+      if (!account.client_email || !account.private_key) throw new Error("Google service account credentials are incomplete");
 
-  const tokenUrl = account.token_uri || "https://oauth2.googleapis.com/token";
-  const issuedAt = Math.floor(Date.now() / 1000);
-  const jwtHeader = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
-  const jwtClaims = Buffer.from(JSON.stringify({
-    iss: account.client_email,
-    scope: "https://www.googleapis.com/auth/spreadsheets",
-    aud: tokenUrl,
-    iat: issuedAt,
-    exp: issuedAt + 3600,
-  })).toString("base64url");
-  const unsignedToken = `${jwtHeader}.${jwtClaims}`;
-  const signer = createSign("RSA-SHA256");
-  signer.update(unsignedToken);
-  signer.end();
-  const assertion = `${unsignedToken}.${signer.sign(account.private_key.replace(/\\n/g, "\n"), "base64url")}`;
-  const tokenResponse = await fetch(tokenUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(12_000),
-  });
-  const tokenResult = await tokenResponse.json() as { access_token?: string; expires_in?: number };
-  if (!tokenResponse.ok || !tokenResult.access_token) throw new Error("Google did not authorize the service account");
-  cachedAccessToken = { token: tokenResult.access_token, expiresAt: Date.now() + (tokenResult.expires_in ?? 3600) * 1000 };
-  return cachedAccessToken.token;
+      const tokenUrl = account.token_uri || "https://oauth2.googleapis.com/token";
+      const issuedAt = Math.floor(Date.now() / 1000);
+      const jwtHeader = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
+      const jwtClaims = Buffer.from(JSON.stringify({
+        iss: account.client_email,
+        scope: "https://www.googleapis.com/auth/spreadsheets",
+        aud: tokenUrl,
+        iat: issuedAt,
+        exp: issuedAt + 3600,
+      })).toString("base64url");
+      const unsignedToken = `${jwtHeader}.${jwtClaims}`;
+      const signer = createSign("RSA-SHA256");
+      signer.update(unsignedToken);
+      signer.end();
+      const assertion = `${unsignedToken}.${signer.sign(account.private_key.replace(/\\n/g, "\n"), "base64url")}`;
+      const tokenResponse = await fetch(tokenUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(12_000),
+      });
+      const tokenResult = await tokenResponse.json() as { access_token?: string; expires_in?: number };
+      if (!tokenResponse.ok || !tokenResult.access_token) throw new Error("Google did not authorize the service account");
+      cachedAccessToken = { token: tokenResult.access_token, expiresAt: Date.now() + (tokenResult.expires_in ?? 3600) * 1000 };
+      return cachedAccessToken.token;
+    } finally {
+      ongoingTokenFetch = null;
+    }
+  })();
+
+  return ongoingTokenFetch;
 }
 
 function escapedTabName(tabName: string) {
@@ -134,7 +178,7 @@ async function appendRegistrationRow(values: Partial<Record<SheetField, string>>
   const row = Array.from({ length: headers.length }, () => "");
   for (const [field, value] of Object.entries(values) as [SheetField, string][]) {
     const index = columns[field];
-    if (index !== undefined) row[index] = value;
+    if (index !== undefined) row[index] = sanitizeForSheet(value);
   }
   const appendRange = `${escapedTabName(tabName)}!A:ZZ`;
   const appendUrl = new URL(`${baseUrl}/${encodeURIComponent(appendRange)}:append`);
@@ -151,9 +195,23 @@ async function appendRegistrationRow(values: Partial<Record<SheetField, string>>
 }
 
 export async function POST(request: Request) {
+  const secFetchSite = request.headers.get("sec-fetch-site");
+  if (secFetchSite === "cross-site") {
+    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  }
+
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) {
     return NextResponse.json({ message: "This request could not be accepted." }, { status: 403 });
+  }
+
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  const ip = forwardedFor ? forwardedFor.split(",")[0].trim() : "127.0.0.1";
+  if (isRateLimited(ip)) {
+    return NextResponse.json(
+      { message: "Too many registration attempts. Please wait a minute before trying again." },
+      { status: 429 }
+    );
   }
 
   let data: Payload;

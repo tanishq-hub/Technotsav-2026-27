@@ -114,7 +114,8 @@ html:has(.registration-page),body:has(.registration-page){height:auto;min-height
   .registration-form{padding:22px 18px;border-radius:22px}
   .registration-form-heading{margin-bottom:19px;padding-bottom:16px}
   .registration-form-heading p{font-size:12px}
-  .registration-fields{gap:14px}
+  .registration-fields{grid-template-columns:minmax(0,1fr);gap:14px}
+  .registration-field-wide{grid-column:auto}
   .registration-type-picker{margin-top:19px}
   .registration-mode-section{margin-top:21px;padding-top:18px}
   .registration-participant-fields{padding:13px;gap:12px}
