@@ -1,6 +1,6 @@
 # Deploy GitHub `main` to Vercel through GitHub Actions
 
-This workflow lets a push to GitHub `main` deploy using the Vercel account owner's token. The Vercel token and project identifiers belong in GitHub Actions Secrets, not in the repository.
+This workflow deploys GitHub `main` through the Vercel CLI using the project owner's token. On Vercel Hobby, deployment is still subject to Vercel's commit-author access rule; see section 4. Keep the token and project identifiers in GitHub Actions Secrets, not in the repository.
 
 ## 1. Link this checkout to the existing Vercel project
 
@@ -10,7 +10,7 @@ From the repository root, run:
 npx vercel link
 ```
 
-Sign in with the Vercel account that owns the project, select the existing `technotsav26-27` project, and let the CLI create `.vercel/project.json`. The `.vercel` directory is ignored by Git.
+Sign in with the Vercel account that owns the project, select the existing `technotsav26-27` project, and let the CLI create its local project link. The `.vercel` directory is ignored by Git.
 
 This Vercel CLI version stores the link in `.vercel/repo.json`. In PowerShell, display only the selected project's name and IDs with:
 
@@ -38,8 +38,8 @@ In the GitHub repository, open **Settings → Secrets and variables → Actions 
 | Secret name | Value |
 | --- | --- |
 | `VERCEL_TOKEN` | The owner access token from step 2 |
-| `VERCEL_ORG_ID` | The `orgId` from `.vercel/project.json` |
-| `VERCEL_PROJECT_ID` | The `projectId` from `.vercel/project.json` |
+| `VERCEL_ORG_ID` | The `orgId` for `technotsav26-27` from the CLI project link |
+| `VERCEL_PROJECT_ID` | The `id` for `technotsav26-27` from the CLI project link |
 
 Keep these as secrets. Do not add them to `.env.example`, a committed file, or a chat message.
 
@@ -49,7 +49,7 @@ The workflow at `.github/workflows/vercel-production.yml` runs on each push to `
 
 After the three secrets are saved, push this workflow to `main` (or start it manually). Check **GitHub → Actions** for the run and Vercel **Deployments** for the production result.
 
-Disconnect Vercel's built-in Git integration before enabling this workflow to avoid duplicate deployment attempts. The GitHub Actions deployment uses the owner-authenticated Vercel CLI path; the site remains online after disconnecting. Keep this workflow and its token active.
+Disconnect Vercel's built-in Git integration before enabling this workflow to avoid duplicate deployment attempts. **On the Hobby plan, an owner token does not bypass Vercel's commit-author restriction for private repositories.** A commit authored by someone without Vercel project access can still be blocked when deployed through this workflow, which may leave the CLI waiting on a blocked deployment. To deploy without upgrading, have contributors submit a branch or pull request and have the Vercel project owner merge the changes with an owner-authored commit. Direct contributor-authored commits to `main` require a Vercel plan that supports adding the contributor to the project.
 
 ## 5. Revoke or rotate the token
 
